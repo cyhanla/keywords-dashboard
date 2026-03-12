@@ -284,6 +284,20 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Trend Prediction -->
+                    <div class="bg-white rounded-xl shadow-sm p-4 mt-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-semibold text-gray-900">🔮 趋势预测（未来7天）</h3>
+                            <span class="text-xs text-gray-500">基于历史数据线性回归</span>
+                        </div>
+                        <div class="h-48">
+                            <canvas id="predictionChart"></canvas>
+                        </div>
+                        <div id="predictionSummary" class="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
+                            <!-- Prediction summary -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -556,6 +570,7 @@ let currentKeyword = null;
 let comparingKeywords = [];
 let favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
 let chart = null;
+let predictionChart = null;
 let timeRange = 30;
 let compareMode = false;
 let activeFilterType = 'all'; // 当前激活的统计卡片筛选类型
@@ -627,11 +642,13 @@ function downloadFile(content, filename, mimeType) {
 
 function init() {
     initDarkMode();
+    renderSearchHistory();
+    initChart();
+    initPredictionChart();
     renderKeywordList();
     renderSeasonalAlerts();
     updateStats();
     updateFavCount();
-    initChart();
 }
 
 // ==================== 季节性预警 ====================
@@ -944,6 +961,149 @@ function clearComparison() {
     renderChart();
 }
 
+// ==================== 预测图表 ====================
+
+function initPredictionChart() {
+    const ctx = document.getElementById('predictionChart').getContext('2d');
+    predictionChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y.toLocaleString();
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value >= 10000 ? (value/10000).toFixed(1) + '万' : value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 线性回归预测
+function predictTrend(data, days = 7) {
+    // 使用最近30天数据进行预测
+    const recentData = data.slice(-30);
+    const n = recentData.length;
+    
+    if (n < 3) return [];
+    
+    // 计算线性回归参数
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += recentData[i].value;
+        sumXY += i * recentData[i].value;
+        sumXX += i * i;
+    }
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+    
+    // 生成预测数据
+    const predictions = [];
+    const lastDate = new Date(recentData[n - 1].date);
+    
+    for (let i = 1; i <= days; i++) {
+        const predictedValue = Math.max(0, Math.round(slope * (n - 1 + i) + intercept));
+        const date = new Date(lastDate);
+        date.setDate(date.getDate() + i);
+        predictions.push({
+            date: date.toISOString().split('T')[0],
+            value: predictedValue,
+            isPrediction: true
+        });
+    }
+    
+    return predictions;
+}
+
+function renderPredictionChart() {
+    if (!currentKeyword || !predictionChart) return;
+    
+    const dailyData = extendedData[currentKeyword].dailyData || [];
+    const predictions = predictTrend(dailyData, 7);
+    
+    // 获取最近7天的实际数据用于对比
+    const actualData = dailyData.slice(-7);
+    
+    // 合并数据
+    const allData = [...actualData, ...predictions];
+    const labels = allData.map(d => {
+        const date = new Date(d.date);
+        return `${date.getMonth() + 1}/${date.getDate()}`;
+    });
+    const values = allData.map(d => d.value);
+    
+    // 区分实际数据和预测数据的颜色
+    const pointColors = allData.map((d, i) => 
+        i < actualData.length ? '#3b82f6' : '#f59e0b'
+    );
+    const borderColors = allData.map((d, i) => 
+        i < actualData.length ? '#3b82f6' : '#f59e0b'
+    );
+    
+    predictionChart.data.labels = labels;
+    predictionChart.data.datasets = [{
+        label: '搜索量趋势',
+        data: values,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: borderColors,
+        pointRadius: 4,
+        segment: {
+            borderDash: (ctx) => {
+                // 预测部分使用虚线
+                return ctx.p0DataIndex >= actualData.length - 1 ? [5, 5] : [];
+            }
+        }
+    }];
+    
+    predictionChart.update();
+    
+    // 更新预测摘要
+    updatePredictionSummary(actualData, predictions);
+}
+
+function updatePredictionSummary(actualData, predictions) {
+    if (actualData.length === 0 || predictions.length === 0) return;
+    
+    const lastActual = actualData[actualData.length - 1].value;
+    const firstPrediction = predictions[0].value;
+    const lastPrediction = predictions[predictions.length - 1].value;
+    
+    const change = ((lastPrediction - lastActual) / lastActual * 100).toFixed(1);
+    const trend = change > 0 ? '上升' : change < 0 ? '下降' : '平稳';
+    const color = change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-600';
+    
+    const summaryEl = document.getElementById('predictionSummary');
+    summaryEl.innerHTML = `
+        <div class="flex items-center gap-2">
+            <span class="font-medium">预测趋势：</span>
+            <span class="${color} font-bold">${trend} ${Math.abs(change)}%</span>
+            <span class="text-gray-500">（7天后预计达到 ${lastPrediction.toLocaleString()}）</span>
+        </div>
+    `;
+}
+
 // ==================== 图表渲染 ====================
 
 function initChart() {
@@ -1216,6 +1376,9 @@ function renderDetails() {
     
     // 渲染相关关键词
     renderRelatedKeywords();
+    
+    // 渲染趋势预测
+    renderPredictionChart();
 }
 
 // ==================== 词云图 ====================
