@@ -218,6 +218,87 @@
             </div>
         </div>
 
+        <!-- 智能预警中心 -->
+        <div id="smartAlertCenter" class="bg-white rounded-xl shadow-sm p-4 mb-6 hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🚨</span>
+                    <h2 class="font-bold text-gray-900">智能预警中心</h2>
+                    <span id="activeAlertCount" class="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">0</span>
+                </div>
+                <button onclick="dismissAllAlerts()" class="text-sm text-gray-500 hover:text-gray-700">全部忽略</button>
+            </div>
+            <div id="smartAlertList" class="space-y-3">
+                <!-- Dynamic alerts -->
+            </div>
+        </div>
+
+        <!-- 季节性周期对比 -->
+        <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <h2 class="font-bold text-gray-900">📅 季节性周期对比</h2>
+                    <span class="text-xs text-gray-500">今年 vs 去年同期</span>
+                </div>
+                <select id="seasonalCompareKeyword" onchange="renderSeasonalComparison()" class="px-3 py-1 border rounded-lg text-sm">
+                    <option value="">选择关键词</option>
+                </select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="p-3 bg-blue-50 rounded-lg text-center">
+                    <div class="text-xs text-gray-500 mb-1">同比去年今日</div>
+                    <div id="yoyGrowth" class="text-xl font-bold text-blue-600">-</div>
+                </div>
+                <div class="p-3 bg-green-50 rounded-lg text-center">
+                    <div class="text-xs text-gray-500 mb-1">距离旺季还有</div>
+                    <div id="daysToPeak" class="text-xl font-bold text-green-600">-</div>
+                </div>
+                <div class="p-3 bg-amber-50 rounded-lg text-center">
+                    <div class="text-xs text-gray-500 mb-1">当前处于</div>
+                    <div id="seasonPhase" class="text-xl font-bold text-amber-600">-</div>
+                </div>
+            </div>
+            <div class="h-48">
+                <canvas id="seasonalCompareChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 关键词组合分析 -->
+        <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <h2 class="font-bold text-gray-900">🔗 关键词组合分析</h2>
+                    <span class="text-xs text-gray-500">发现经常一起出现的黄金组合</span>
+                </div>
+                <button onclick="findKeywordCombinations()" class="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">重新计算</button>
+            </div>
+            <div id="keywordCombinations" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Dynamic combinations -->
+            </div>
+        </div>
+
+        <!-- 投放建议引擎 -->
+        <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <h2 class="font-bold text-gray-900">🎯 投放建议引擎</h2>
+                    <span class="text-xs text-gray-500">AI推荐最值得投放的关键词</span>
+                </div>
+                <div class="flex gap-2">
+                    <input type="number" id="budgetInput" placeholder="预算" class="w-24 px-2 py-1 border rounded-lg text-sm" value="10000">
+                    <select id="targetType" class="px-2 py-1 border rounded-lg text-sm">
+                        <option value="volume">追求流量</option>
+                        <option value="conversion">追求转化</option>
+                        <option value="balance">平衡型</option>
+                    </select>
+                    <button onclick="generateRecommendations()" class="px-3 py-1 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">生成建议</button>
+                </div>
+            </div>
+            <div id="recommendationResults" class="space-y-3">
+                <!-- Dynamic recommendations -->
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left: Keyword List -->
             <div class="lg:col-span-1">
@@ -750,6 +831,436 @@ function init() {
     updateStats();
     updateFavCount();
     renderRankings();
+}
+
+function init() {
+    initDarkMode();
+    renderSearchHistory();
+    renderTagFilters();
+    initChart();
+    initPredictionChart();
+    initCompetitionChart();
+    initSeasonalCompareChart();
+    renderKeywordList();
+    renderSeasonalAlerts();
+    updateStats();
+    updateFavCount();
+    renderRankings();
+    initSmartAlerts();
+    initSeasonalComparison();
+    findKeywordCombinations();
+    generateRecommendations();
+}
+
+// ==================== 智能预警系统 ====================
+
+let dismissedAlerts = JSON.parse(localStorage.getItem('dismissedAlerts') || '[]');
+
+function initSmartAlerts() {
+    checkSmartAlerts();
+    // 每30分钟检查一次
+    setInterval(checkSmartAlerts, 30 * 60 * 1000);
+}
+
+function checkSmartAlerts() {
+    const alerts = [];
+    const now = new Date().toISOString();
+    
+    Object.keys(extendedData).forEach(keyword => {
+        const d = extendedData[keyword];
+        const dailyData = d.dailyData || d.data;
+        
+        // 预警1: 连续3天涨幅超过15%
+        if (dailyData.length >= 3) {
+            const last3 = dailyData.slice(-3);
+            const growth1 = (last3[1].value - last3[0].value) / last3[0].value;
+            const growth2 = (last3[2].value - last3[1].value) / last3[1].value;
+            
+            if (growth1 > 0.15 && growth2 > 0.15) {
+                const alertId = `explosive_${keyword}_${last3[2].date}`;
+                if (!dismissedAlerts.includes(alertId)) {
+                    alerts.push({
+                        id: alertId,
+                        type: 'explosive',
+                        icon: '🚀',
+                        title: `${keyword} 进入爆发期`,
+                        message: `连续2天涨幅超过15%，当前涨幅 ${((growth1 + growth2) * 50).toFixed(1)}%`,
+                        keyword: keyword,
+                        time: now,
+                        action: '立即查看'
+                    });
+                }
+            }
+        }
+        
+        // 预警2: 竞争度突然跳涨超过20点
+        if (d.competition > 50 && d.competitionChange > 20) {
+            const alertId = `competition_${keyword}_${now}`;
+            if (!dismissedAlerts.includes(alertId)) {
+                alerts.push({
+                    id: alertId,
+                    type: 'competition',
+                    icon: '⚠️',
+                    title: `${keyword} 竞争加剧`,
+                    message: `竞争度突然上升 ${d.competitionChange} 点，可能有新竞争者入场`,
+                    keyword: keyword,
+                    time: now,
+                    action: '分析详情'
+                });
+            }
+        }
+        
+        // 预警3: 异常暴跌（单日跌幅超过30%）
+        if (dailyData.length >= 2) {
+            const last2 = dailyData.slice(-2);
+            const drop = (last2[0].value - last2[1].value) / last2[0].value;
+            
+            if (drop > 0.3) {
+                const alertId = `drop_${keyword}_${last2[1].date}`;
+                if (!dismissedAlerts.includes(alertId)) {
+                    alerts.push({
+                        id: alertId,
+                        type: 'drop',
+                        icon: '📉',
+                        title: `${keyword} 异常下跌`,
+                        message: `单日下跌 ${(drop * 100).toFixed(1)}%，建议关注原因`,
+                        keyword: keyword,
+                        time: now,
+                        action: '查看原因'
+                    });
+                }
+            }
+        }
+    });
+    
+    // 预警4: 收藏词变化提醒
+    favorites.forEach(keyword => {
+        if (extendedData[keyword]) {
+            const d = extendedData[keyword];
+            if (Math.abs(d.growth) > 20) {
+                const alertId = `fav_${keyword}_${now}`;
+                if (!dismissedAlerts.includes(alertId)) {
+                    alerts.push({
+                        id: alertId,
+                        type: 'favorite',
+                        icon: '⭐',
+                        title: `关注的 ${keyword} 有重大变化`,
+                        message: `涨跌幅 ${d.growth > 0 ? '+' : ''}${d.growth.toFixed(1)}%，${d.growth > 0 ? '建议考虑加仓' : '建议关注风险'}`,
+                        keyword: keyword,
+                        time: now,
+                        action: '查看详情'
+                    });
+                }
+            }
+        }
+    });
+    
+    // 渲染预警
+    renderSmartAlerts(alerts);
+}
+
+function renderSmartAlerts(alerts) {
+    const container = document.getElementById('smartAlertCenter');
+    const listEl = document.getElementById('smartAlertList');
+    const countEl = document.getElementById('activeAlertCount');
+    
+    if (alerts.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+    
+    container.classList.remove('hidden');
+    countEl.textContent = alerts.length;
+    
+    listEl.innerHTML = alerts.map(alert => `
+        <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <span class="text-xl">${alert.icon}</span>
+            <div class="flex-1">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-gray-900">${alert.title}</span>
+                    <button onclick="dismissAlert('${alert.id}')" class="text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+                <p class="text-sm text-gray-600 mt-1">${alert.message}</p>
+                <div class="flex items-center gap-2 mt-2">
+                    <button onclick="selectKeyword('${alert.keyword}'); dismissAlert('${alert.id}')" 
+                            class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">${alert.action}</button>
+                    <span class="text-xs text-gray-400">${new Date(alert.time).toLocaleTimeString()}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function dismissAlert(alertId) {
+    dismissedAlerts.push(alertId);
+    // 保留最近100条忽略记录
+    dismissedAlerts = dismissedAlerts.slice(-100);
+    localStorage.setItem('dismissedAlerts', JSON.stringify(dismissedAlerts));
+    checkSmartAlerts();
+}
+
+function dismissAllAlerts() {
+    const allAlerts = document.querySelectorAll('#smartAlertList > div');
+    allAlerts.forEach(el => {
+        const btn = el.querySelector('button[onclick^="dismissAlert"]');
+        if (btn) {
+            const match = btn.getAttribute('onclick').match(/dismissAlert\('(.+?)'\)/);
+            if (match) dismissedAlerts.push(match[1]);
+        }
+    });
+    dismissedAlerts = dismissedAlerts.slice(-100);
+    localStorage.setItem('dismissedAlerts', JSON.stringify(dismissedAlerts));
+    document.getElementById('smartAlertCenter').classList.add('hidden');
+}
+
+// ==================== 季节性周期对比 ====================
+
+let seasonalCompareChart = null;
+
+function initSeasonalComparison() {
+    const select = document.getElementById('seasonalCompareKeyword');
+    const keywords = Object.keys(extendedData).sort();
+    
+    select.innerHTML = '<option value="">选择关键词</option>' + 
+        keywords.map(kw => `<option value="${kw}">${kw}</option>`).join('');
+    
+    // 默认选择第一个有季节性模式的词
+    const seasonalKeywords = keywords.filter(kw => extendedData[kw].season !== 'all');
+    if (seasonalKeywords.length > 0) {
+        select.value = seasonalKeywords[0];
+        renderSeasonalComparison();
+    }
+}
+
+function initSeasonalCompareChart() {
+    const ctx = document.getElementById('seasonalCompareChart').getContext('2d');
+    seasonalCompareChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: 'top' }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value >= 10000 ? (value/10000).toFixed(1) + '万' : value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderSeasonalComparison() {
+    const keyword = document.getElementById('seasonalCompareKeyword').value;
+    if (!keyword || !seasonalCompareChart) return;
+    
+    const d = extendedData[keyword];
+    const dailyData = d.dailyData || d.data;
+    
+    // 模拟去年数据（实际应该是真实历史数据）
+    // 这里用今年数据乘以0.8-1.2的随机因子来模拟
+    const thisYearData = dailyData.slice(-90); // 最近90天
+    const lastYearData = thisYearData.map((item, idx) => ({
+        date: item.date,
+        value: Math.round(item.value * (0.8 + Math.random() * 0.4))
+    }));
+    
+    // 计算同比
+    const currentValue = thisYearData[thisYearData.length - 1].value;
+    const lastYearValue = lastYearData[lastYearData.length - 1].value;
+    const yoyGrowth = ((currentValue - lastYearValue) / lastYearValue * 100).toFixed(1);
+    
+    document.getElementById('yoyGrowth').innerHTML = 
+        `${yoyGrowth > 0 ? '+' : ''}${yoyGrowth}%`;
+    document.getElementById('yoyGrowth').className = 
+        `text-xl font-bold ${yoyGrowth > 0 ? 'text-green-600' : 'text-red-600'}`;
+    
+    // 计算距离旺季
+    const season = d.season;
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    let peakMonth, daysToPeak;
+    
+    switch(season) {
+        case 'spring': peakMonth = 3; break;
+        case 'summer': peakMonth = 6; break;
+        case 'autumn': peakMonth = 9; break;
+        case 'winter': peakMonth = 12; break;
+        default: peakMonth = currentMonth;
+    }
+    
+    if (currentMonth <= peakMonth) {
+        daysToPeak = (peakMonth - currentMonth) * 30;
+    } else {
+        daysToPeak = ((12 - currentMonth) + peakMonth) * 30;
+    }
+    
+    document.getElementById('daysToPeak').textContent = `${daysToPeak} 天`;
+    
+    // 当前阶段
+    const phaseMap = {
+        'spring': '春季预热期',
+        'summer': '夏季旺季',
+        'autumn': '秋季准备期',
+        'winter': '冬季高峰期',
+        'all': '全年稳定期'
+    };
+    document.getElementById('seasonPhase').textContent = phaseMap[season] || '平稳期';
+    
+    // 渲染图表
+    const labels = thisYearData.map(item => {
+        const date = new Date(item.date);
+        return `${date.getMonth() + 1}/${date.getDate()}`;
+    });
+    
+    seasonalCompareChart.data.labels = labels;
+    seasonalCompareChart.data.datasets = [
+        {
+            label: '今年',
+            data: thisYearData.map(item => item.value),
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.3
+        },
+        {
+            label: '去年同期',
+            data: lastYearData.map(item => item.value),
+            borderColor: '#9ca3af',
+            backgroundColor: 'rgba(156, 163, 175, 0.1)',
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3
+        }
+    ];
+    
+    seasonalCompareChart.update();
+}
+
+// ==================== 关键词组合分析 ====================
+
+function findKeywordCombinations() {
+    const keywords = Object.keys(extendedData);
+    const combinations = [];
+    
+    // 简单算法：找出搜索量趋势相似的关键词组合
+    // 实际应该基于真实的搜索关联数据
+    for (let i = 0; i < keywords.length; i++) {
+        for (let j = i + 1; j < keywords.length; j++) {
+            const kw1 = keywords[i];
+            const kw2 = keywords[j];
+            const d1 = extendedData[kw1];
+            const d2 = extendedData[kw2];
+            
+            // 如果两个词在同一类目且有相似趋势
+            if (d1.season === d2.season && d1.season !== 'all') {
+                const growthDiff = Math.abs(d1.growth - d2.growth);
+                if (growthDiff < 10) { // 趋势相似
+                    combinations.push({
+                        keywords: [kw1, kw2],
+                        reason: '同季节性 + 趋势相似',
+                        score: 100 - growthDiff
+                    });
+                }
+            }
+        }
+    }
+    
+    // 排序取前6个
+    combinations.sort((a, b) => b.score - a.score);
+    const topCombinations = combinations.slice(0, 6);
+    
+    const container = document.getElementById('keywordCombinations');
+    container.innerHTML = topCombinations.map(combo => `
+        <div class="p-3 bg-gray-50 rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+                ${combo.keywords.map(kw => `
+                    <button onclick="selectKeyword('${kw}')" class="px-2 py-1 bg-blue-100 text-blue-700 text-sm rounded hover:bg-blue-200">${kw}</button>
+                `).join('<span class="text-gray-400">+</span>')}
+            </div>
+            <p class="text-xs text-gray-500">${combo.reason}</p>
+            <p class="text-xs text-amber-600 mt-1">💡 建议同时投放这两个词</p>
+        </div>
+    `).join('');
+}
+
+// ==================== 投放建议引擎 ====================
+
+function generateRecommendations() {
+    const budget = parseInt(document.getElementById('budgetInput').value) || 10000;
+    const targetType = document.getElementById('targetType').value;
+    const keywords = Object.keys(extendedData);
+    
+    // 计算每个词的综合得分
+    const scored = keywords.map(keyword => {
+        const d = extendedData[keyword];
+        let score = 0;
+        let reason = '';
+        
+        switch(targetType) {
+            case 'volume': // 追求流量
+                score = d.current * 0.5 + d.growth * 100;
+                reason = `搜索量高 (${d.current.toLocaleString()})，适合追求曝光`;
+                break;
+            case 'conversion': // 追求转化
+                score = parseFloat(d.conversion) * 1000 + d.stability;
+                reason = `转化率 ${d.conversion}%，稳定性好`;
+                break;
+            case 'balance': // 平衡型
+            default:
+                score = d.current * 0.3 + parseFloat(d.conversion) * 500 + (100 - d.competition) * 10;
+                reason = `综合表现优秀，竞争度适中 (${d.competition}/100)`;
+                break;
+        }
+        
+        // 减去竞争度惩罚
+        score -= d.competition * 5;
+        
+        return { keyword, score, reason, data: d };
+    });
+    
+    // 排序取前10
+    scored.sort((a, b) => b.score - a.score);
+    const top10 = scored.slice(0, 10);
+    
+    // 分配预算建议
+    const totalScore = top10.reduce((sum, item) => sum + item.score, 0);
+    
+    const container = document.getElementById('recommendationResults');
+    container.innerHTML = `
+        <div class="bg-blue-50 p-3 rounded-lg mb-4">
+            <p class="text-sm text-blue-800">
+                <strong>💡 投放策略建议：</strong>基于您的预算 ¥${budget.toLocaleString()} 和「${targetType === 'volume' ? '追求流量' : targetType === 'conversion' ? '追求转化' : '平衡型'}」目标，
+                建议重点投放以下 ${top10.length} 个关键词
+            </p>
+        </div>
+        ${top10.map((item, idx) => {
+            const budgetShare = Math.round(item.score / totalScore * budget);
+            const priority = idx < 3 ? '🔥 高优先级' : idx < 6 ? '⭐ 中优先级' : '📌 低优先级';
+            return `
+                <div class="flex items-center justify-between p-3 ${idx < 3 ? 'bg-amber-50' : 'bg-gray-50'} rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 flex items-center justify-center text-xs font-bold ${idx < 3 ? 'bg-amber-200 text-amber-800' : 'bg-gray-200 text-gray-600'} rounded-full">${idx + 1}</span>
+                        <div>
+                            <button onclick="selectKeyword('${item.keyword}')" class="font-bold text-gray-900 hover:text-blue-600">${item.keyword}</button>
+                            <p class="text-xs text-gray-500">${item.reason}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-bold text-green-600">¥${budgetShare.toLocaleString()}</p>
+                        <p class="text-xs text-gray-400">${priority}</p>
+                    </div>
+                </div>
+            `;
+        }).join('')}
+    `;
 }
 
 // ==================== 季节性预警 ====================
