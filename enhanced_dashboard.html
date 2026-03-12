@@ -277,6 +277,22 @@
 
                 <!-- Detail Cards -->
                 <div id="detailSection" class="hidden">
+                    <!-- Competition Matrix -->
+                    <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-semibold text-gray-900">🎯 竞争态势矩阵</h3>
+                            <span class="text-xs text-gray-500">搜索量 vs 竞争度</span>
+                        </div>
+                        <div class="h-64">
+                            <canvas id="competitionMatrix"></canvas>
+                        </div>
+                        <div class="mt-2 flex items-center justify-center gap-4 text-xs text-gray-500">
+                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-green-400"></span>低竞争高流量</span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-400"></span>高竞争高流量</span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-gray-400"></span>当前选中</span>
+                        </div>
+                    </div>
+                    
                     <!-- Keyword Cloud -->
                     <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
                         <div class="flex items-center justify-between mb-4">
@@ -652,6 +668,7 @@ let keywordTags = JSON.parse(localStorage.getItem('keywordTags') || '{}');
 let currentTagFilter = 'all';
 let chart = null;
 let predictionChart = null;
+let competitionChart = null;
 let timeRange = 30;
 let compareMode = false;
 let activeFilterType = 'all'; // 当前激活的统计卡片筛选类型
@@ -727,6 +744,7 @@ function init() {
     renderTagFilters();
     initChart();
     initPredictionChart();
+    initCompetitionChart();
     renderKeywordList();
     renderSeasonalAlerts();
     updateStats();
@@ -1377,6 +1395,121 @@ function updatePredictionSummary(actualData, predictions) {
     `;
 }
 
+// ==================== 竞争态势矩阵 ====================
+
+function initCompetitionChart() {
+    const ctx = document.getElementById('competitionMatrix').getContext('2d');
+    competitionChart = new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets: [] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.raw.keyword + ': 搜索量 ' + context.raw.x.toLocaleString() + ', 竞争度 ' + context.raw.y + '/100';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: '搜索量' },
+                    ticks: {
+                        callback: function(value) {
+                            return value >= 10000 ? (value/10000).toFixed(1) + '万' : value;
+                        }
+                    }
+                },
+                y: {
+                    title: { display: true, text: '竞争度' },
+                    min: 0,
+                    max: 100
+                }
+            },
+            onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    const datasetIndex = elements[0].datasetIndex;
+                    const keyword = competitionChart.data.datasets[datasetIndex].data[index].keyword;
+                    selectKeyword(keyword);
+                }
+            }
+        }
+    });
+}
+
+function renderCompetitionMatrix() {
+    if (!competitionChart) return;
+    
+    const keywords = Object.keys(extendedData);
+    const currentData = currentKeyword ? extendedData[currentKeyword] : null;
+    
+    // 分类数据
+    const highVolumeLowCompetition = []; // 明星词：高流量低竞争
+    const highVolumeHighCompetition = []; // 竞争词：高流量高竞争
+    const lowVolumeLowCompetition = []; // 潜力词：低流量低竞争
+    const lowVolumeHighCompetition = []; // 避免词：低流量高竞争
+    const currentPoint = [];
+    
+    keywords.forEach(keyword => {
+        const d = extendedData[keyword];
+        const point = { x: d.current, y: d.competition, keyword };
+        
+        if (keyword === currentKeyword) {
+            currentPoint.push(point);
+        } else if (d.current >= 1000000 && d.competition <= 50) {
+            highVolumeLowCompetition.push(point);
+        } else if (d.current >= 1000000 && d.competition > 50) {
+            highVolumeHighCompetition.push(point);
+        } else if (d.current < 1000000 && d.competition <= 50) {
+            lowVolumeLowCompetition.push(point);
+        } else {
+            lowVolumeHighCompetition.push(point);
+        }
+    });
+    
+    competitionChart.data.datasets = [
+        {
+            label: '明星词（高流量低竞争）',
+            data: highVolumeLowCompetition,
+            backgroundColor: 'rgba(34, 197, 94, 0.6)',
+            pointRadius: 5
+        },
+        {
+            label: '竞争词（高流量高竞争）',
+            data: highVolumeHighCompetition,
+            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+            pointRadius: 5
+        },
+        {
+            label: '潜力词（低流量低竞争）',
+            data: lowVolumeLowCompetition,
+            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+            pointRadius: 4
+        },
+        {
+            label: '避免词（低流量高竞争）',
+            data: lowVolumeHighCompetition,
+            backgroundColor: 'rgba(156, 163, 175, 0.4)',
+            pointRadius: 3
+        },
+        {
+            label: '当前选中',
+            data: currentPoint,
+            backgroundColor: 'rgba(168, 85, 247, 1)',
+            pointRadius: 8,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        }
+    ];
+    
+    competitionChart.update();
+}
+
 // ==================== 图表渲染 ====================
 
 function initChart() {
@@ -1695,6 +1828,9 @@ function renderDetails() {
     
     // 渲染关键词标签
     renderKeywordTags(currentKeyword);
+    
+    // 渲染竞争态势矩阵
+    renderCompetitionMatrix();
 }
 
 // ==================== 词云图 ====================
