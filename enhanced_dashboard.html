@@ -196,6 +196,28 @@
             </div>
         </div>
 
+        <!-- 变化排行榜 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-sm p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-gray-900">📈 涨幅榜 Top10</h3>
+                    <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">今日上升最快</span>
+                </div>
+                <div id="risingRanking" class="space-y-2">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-gray-900">📉 降幅榜 Top10</h3>
+                    <span class="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">今日下降最快</span>
+                </div>
+                <div id="fallingRanking" class="space-y-2">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left: Keyword List -->
             <div class="lg:col-span-1">
@@ -664,6 +686,7 @@ function init() {
     renderSeasonalAlerts();
     updateStats();
     updateFavCount();
+    renderRankings();
 }
 
 // ==================== 季节性预警 ====================
@@ -823,6 +846,56 @@ function clearSearch() {
     document.getElementById('searchInput').value = '';
     document.getElementById('clearSearchBtn').classList.add('hidden');
     searchKeyword();
+}
+
+// ==================== 变化排行榜 ====================
+
+function renderRankings() {
+    const keywords = Object.keys(extendedData);
+    
+    // 涨幅榜
+    const rising = keywords
+        .filter(k => extendedData[k].growth > 0)
+        .sort((a, b) => extendedData[b].growth - extendedData[a].growth)
+        .slice(0, 10);
+    
+    const risingContainer = document.getElementById('risingRanking');
+    if (risingContainer) {
+        risingContainer.innerHTML = rising.map((keyword, idx) => {
+            const d = extendedData[keyword];
+            return `
+                <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer" onclick="selectKeyword('${keyword}')">
+                    <div class="flex items-center gap-3">
+                        <span class="w-5 h-5 flex items-center justify-center text-xs font-bold ${idx < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'} rounded">${idx + 1}</span>
+                        <span class="font-medium text-sm">${keyword}</span>
+                    </div>
+                    <span class="text-sm font-bold text-green-600">+${d.growth.toFixed(1)}%</span>
+                </div>
+            `;
+        }).join('') || '<div class="text-center text-gray-400 py-4">暂无上升关键词</div>';
+    }
+    
+    // 降幅榜
+    const falling = keywords
+        .filter(k => extendedData[k].growth < 0)
+        .sort((a, b) => extendedData[a].growth - extendedData[b].growth)
+        .slice(0, 10);
+    
+    const fallingContainer = document.getElementById('fallingRanking');
+    if (fallingContainer) {
+        fallingContainer.innerHTML = falling.map((keyword, idx) => {
+            const d = extendedData[keyword];
+            return `
+                <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer" onclick="selectKeyword('${keyword}')">
+                    <div class="flex items-center gap-3">
+                        <span class="w-5 h-5 flex items-center justify-center text-xs font-bold ${idx < 3 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'} rounded">${idx + 1}</span>
+                        <span class="font-medium text-sm">${keyword}</span>
+                    </div>
+                    <span class="text-sm font-bold text-red-600">${d.growth.toFixed(1)}%</span>
+                </div>
+            `;
+        }).join('') || '<div class="text-center text-gray-400 py-4">暂无下降关键词</div>';
+    }
 }
 
 // ==================== 关键词列表渲染 ====================
