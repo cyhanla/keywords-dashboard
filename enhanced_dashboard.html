@@ -67,23 +67,23 @@
     <main class="max-w-7xl mx-auto px-4 py-6">
         <!-- Stats Cards -->
         <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+            <div class="stats-card bg-white rounded-xl p-4 shadow-sm card-hover cursor-pointer transition-all" onclick="filterByType('all')">
                 <div class="text-sm text-gray-500 mb-1">监控关键词</div>
                 <div class="text-2xl font-bold text-gray-900" id="totalKeywords">-</div>
             </div>
-            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+            <div class="stats-card bg-white rounded-xl p-4 shadow-sm card-hover cursor-pointer transition-all" onclick="filterByType('rising')">
                 <div class="text-sm text-gray-500 mb-1">趋势上升</div>
                 <div class="text-2xl font-bold text-green-600" id="trendingCount">-</div>
             </div>
-            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+            <div class="stats-card bg-white rounded-xl p-4 shadow-sm card-hover cursor-pointer transition-all" onclick="filterByType('anomaly')">
                 <div class="text-sm text-gray-500 mb-1">异常波动</div>
                 <div class="text-2xl font-bold text-red-600" id="anomalyCount">-</div>
             </div>
-            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+            <div class="stats-card bg-white rounded-xl p-4 shadow-sm card-hover cursor-pointer transition-all" onclick="filterByType('explosive')">
                 <div class="text-sm text-gray-500 mb-1">爆发期词</div>
                 <div class="text-2xl font-bold text-red-600" id="explosiveCount">-</div>
             </div>
-            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+            <div class="stats-card bg-white rounded-xl p-4 shadow-sm card-hover cursor-pointer transition-all" onclick="filterByType('season')">
                 <div class="text-sm text-gray-500 mb-1">季节性预警</div>
                 <div class="text-2xl font-bold text-amber-600" id="seasonCount">-</div>
             </div>
@@ -371,7 +371,7 @@ async function loadData() {
     }
 }
 
-// 处理原始数据，生成扩展数据
+// 处理原始数据，生成扩展数据和日级别插值
 function processData() {
     extendedData = {};
     const seasonalPatterns = {
@@ -428,8 +428,12 @@ function processData() {
         const spikeRatio = secondLast > 0 ? (lastValue - secondLast) / secondLast : 0;
         const isAnomaly = Math.abs(spikeRatio) > 0.5;
         
+        // 生成日级别插值数据
+        const dailyData = generateDailyData(data);
+        
         extendedData[keyword] = {
             data,
+            dailyData,
             current,
             avg,
             growth,
@@ -448,6 +452,49 @@ function processData() {
     });
 }
 
+// 生成日级别插值数据
+function generateDailyData(monthlyData) {
+    const dailyData = [];
+    
+    for (let i = 0; i < monthlyData.length - 1; i++) {
+        const current = monthlyData[i];
+        const next = monthlyData[i + 1];
+        const currentDate = new Date(current.date);
+        const nextDate = new Date(next.date);
+        const daysDiff = Math.round((nextDate - currentDate) / (1000 * 60 * 60 * 24));
+        
+        for (let day = 0; day < daysDiff; day++) {
+            const ratio = day / daysDiff;
+            const interpolatedValue = Math.round(current.value + (next.value - current.value) * ratio);
+            const interpolatedConversion = parseFloat((current.conversion + (next.conversion - current.conversion) * ratio).toFixed(4));
+            const interpolatedClickRate = parseFloat((current.click_rate + (next.click_rate - current.click_rate) * ratio).toFixed(4));
+            
+            const interpolatedDate = new Date(currentDate);
+            interpolatedDate.setDate(interpolatedDate.getDate() + day);
+            
+            dailyData.push({
+                date: interpolatedDate.toISOString().split('T')[0],
+                value: interpolatedValue,
+                conversion: interpolatedConversion,
+                click_rate: interpolatedClickRate
+            });
+        }
+    }
+    
+    // 添加最后一个月的数据点
+    if (monthlyData.length > 0) {
+        const last = monthlyData[monthlyData.length - 1];
+        dailyData.push({
+            date: last.date,
+            value: last.value,
+            conversion: last.conversion,
+            click_rate: last.click_rate
+        });
+    }
+    
+    return dailyData;
+}
+
 // 页面加载完成后启动
 loadData();
 
@@ -458,6 +505,7 @@ let favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
 let chart = null;
 let timeRange = 30;
 let compareMode = false;
+let activeFilterType = 'all'; // 当前激活的统计卡片筛选类型
 
 // ==================== 初始化 ====================
 
@@ -515,6 +563,60 @@ function renderSeasonalAlerts() {
     `).join('');
     
     document.getElementById('seasonCount').textContent = alerts.length;
+}
+
+// ==================== 统计卡片筛选 ====================
+
+function filterByType(type) {
+    activeFilterType = type;
+    
+    // 更新卡片高亮样式
+    const cards = {
+        'all': 0,
+        'rising': 1,
+        'anomaly': 2,
+        'explosive': 3,
+        'season': 4
+    };
+    
+    document.querySelectorAll('.stats-card').forEach((card, idx) => {
+        if (idx === cards[type]) {
+            card.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50');
+        } else {
+            card.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50');
+        }
+    });
+    
+    // 设置对应的筛选条件
+    const trendFilter = document.getElementById('trendFilter');
+    const seasonFilter = document.getElementById('seasonFilter');
+    
+    switch(type) {
+        case 'all':
+            trendFilter.value = 'all';
+            seasonFilter.value = 'all';
+            break;
+        case 'rising':
+            trendFilter.value = 'rising';
+            seasonFilter.value = 'all';
+            break;
+        case 'anomaly':
+            trendFilter.value = 'anomaly';
+            seasonFilter.value = 'all';
+            break;
+        case 'explosive':
+            trendFilter.value = 'explosive';
+            seasonFilter.value = 'all';
+            break;
+        case 'season':
+            trendFilter.value = 'all';
+            seasonFilter.value = 'upcoming';
+            break;
+    }
+    
+    // 渲染列表并滚动到顶部
+    renderKeywordList();
+    document.getElementById('keywordList').scrollTop = 0;
 }
 
 // ==================== 关键词列表渲染 ====================
@@ -731,9 +833,10 @@ function renderChart() {
     const colors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981'];
     
     const datasets = keywordsToShow.map((kw, idx) => {
-        const data = extendedData[kw].data;
-        const sliceStart = Math.max(0, data.length - Math.ceil(timeRange / 30));
-        const sliced = data.slice(sliceStart);
+        // 使用日级别数据
+        const dailyData = extendedData[kw].dailyData || extendedData[kw].data;
+        const sliceStart = Math.max(0, dailyData.length - timeRange);
+        const sliced = dailyData.slice(sliceStart);
         
         return {
             label: kw,
@@ -742,14 +845,28 @@ function renderChart() {
             backgroundColor: colors[idx % colors.length] + '20',
             fill: comparingKeywords.length === 0,
             tension: 0.3,
-            pointRadius: 3,
+            pointRadius: 2,
             pointHoverRadius: 5
         };
     });
     
-    const labels = extendedData[currentKeyword].data
-        .slice(Math.max(0, extendedData[currentKeyword].data.length - Math.ceil(timeRange / 30)))
-        .map(d => d.date.slice(5)); // MM-DD
+    // 使用日级别数据生成标签
+    const dailyData = extendedData[currentKeyword].dailyData || extendedData[currentKeyword].data;
+    const slicedData = dailyData.slice(Math.max(0, dailyData.length - timeRange));
+    
+    // 根据时间范围决定标签格式
+    const labels = slicedData.map((d, i) => {
+        if (timeRange <= 30) {
+            // 30天内显示 MM-DD
+            return d.date.slice(5);
+        } else if (timeRange <= 90) {
+            // 90天内每隔5天显示一个标签
+            return i % 5 === 0 ? d.date.slice(5) : '';
+        } else {
+            // 1年内每隔15天显示一个标签
+            return i % 15 === 0 ? d.date.slice(5) : '';
+        }
+    });
     
     chart.data.labels = labels;
     chart.data.datasets = datasets;
