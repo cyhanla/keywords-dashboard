@@ -204,6 +204,28 @@
 
                 <!-- Detail Cards -->
                 <div id="detailSection" class="hidden">
+                    <!-- Keyword Cloud -->
+                    <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-semibold text-gray-900">☁️ 关键词云图（按搜索量）</h3>
+                            <div class="flex gap-2">
+                                <button onclick="renderWordCloud('volume')" class="px-3 py-1 text-xs rounded bg-blue-100 text-blue-700">按搜索量</button>
+                                <button onclick="renderWordCloud('growth')" class="px-3 py-1 text-xs rounded bg-gray-100 text-gray-600">按涨幅</button>
+                            </div>
+                        </div>
+                        <div id="wordCloud" class="h-40 flex flex-wrap items-center justify-center gap-2 overflow-hidden">
+                            <!-- Dynamic word cloud -->
+                        </div>
+                    </div>
+                    
+                    <!-- Related Keywords -->
+                    <div id="relatedKeywordsSection" class="bg-white rounded-xl shadow-sm p-4 mb-4 hidden">
+                        <h3 class="font-semibold text-gray-900 mb-3">🔗 相关关键词推荐</h3>
+                        <div id="relatedKeywords" class="flex flex-wrap gap-2">
+                            <!-- Dynamic related keywords -->
+                        </div>
+                    </div>
+                    
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                         <div class="bg-white rounded-xl p-4 shadow-sm">
                             <div class="text-sm text-gray-500 mb-1">当前指数</div>
@@ -1120,6 +1142,104 @@ function renderDetails() {
     document.getElementById('stabilityBar').style.width = d.stability + '%';
     document.getElementById('detailAcceleration').textContent = (d.acceleration > 0 ? '+' : '') + d.acceleration.toFixed(1) + '%';
     document.getElementById('detailAcceleration').className = 'text-lg font-bold ' + (d.acceleration > 0 ? 'text-green-600' : 'text-red-600');
+    
+    // 渲染词云图
+    renderWordCloud('volume');
+    
+    // 渲染相关关键词
+    renderRelatedKeywords();
+}
+
+// ==================== 词云图 ====================
+
+function renderWordCloud(sortBy = 'volume') {
+    const container = document.getElementById('wordCloud');
+    const keywords = Object.keys(extendedData);
+    
+    // 排序并取前30个
+    const sorted = keywords.sort((a, b) => {
+        if (sortBy === 'volume') return extendedData[b].current - extendedData[a].current;
+        if (sortBy === 'growth') return extendedData[b].growth - extendedData[a].growth;
+        return 0;
+    }).slice(0, 30);
+    
+    // 计算大小范围
+    const maxValue = Math.max(...sorted.map(k => extendedData[k].current));
+    const minValue = Math.min(...sorted.map(k => extendedData[k].current));
+    
+    container.innerHTML = sorted.map(keyword => {
+        const d = extendedData[keyword];
+        const size = minValue === maxValue ? 14 : 10 + ((d.current - minValue) / (maxValue - minValue)) * 24;
+        const opacity = 0.5 + ((d.current - minValue) / (maxValue - minValue)) * 0.5;
+        
+        // 根据趋势设置颜色
+        let colorClass = 'text-blue-600';
+        if (d.trendTag === 'explosive') colorClass = 'text-red-600';
+        else if (d.trendTag === 'rising') colorClass = 'text-green-600';
+        else if (d.trendTag === 'falling') colorClass = 'text-orange-600';
+        
+        return `<span 
+            class="${colorClass} hover:opacity-100 transition-all cursor-pointer" 
+            style="font-size: ${size}px; opacity: ${opacity}"
+            onclick="selectKeyword('${keyword}')"
+            title="${keyword}: ${d.current.toLocaleString()} (${d.growth > 0 ? '+' : ''}${d.growth.toFixed(1)}%)"
+        >${keyword}</span>`;
+    }).join('');
+}
+
+// ==================== 相关关键词推荐 ====================
+
+function renderRelatedKeywords() {
+    if (!currentKeyword) return;
+    
+    const container = document.getElementById('relatedKeywords');
+    const section = document.getElementById('relatedKeywordsSection');
+    
+    // 简单的相关性算法：相同趋势、相似搜索量、相同季节性的词
+    const current = extendedData[currentKeyword];
+    const allKeywords = Object.keys(extendedData);
+    
+    // 计算相似度分数
+    const scored = allKeywords.filter(k => k !== currentKeyword).map(keyword => {
+        const d = extendedData[keyword];
+        let score = 0;
+        
+        // 相同趋势 +30
+        if (d.trendTag === current.trendTag) score += 30;
+        
+        // 搜索量相似度 (差距越小分数越高)
+        const volumeDiff = Math.abs(d.current - current.current) / Math.max(current.current, 1);
+        score += Math.max(0, 20 - volumeDiff * 10);
+        
+        // 相同季节性 +20
+        if (d.season === current.season && d.season !== 'all') score += 20;
+        
+        // 涨幅相似 +15
+        const growthDiff = Math.abs(d.growth - current.growth);
+        score += Math.max(0, 15 - growthDiff);
+        
+        return { keyword, score };
+    });
+    
+    // 排序取前8个
+    const related = scored.sort((a, b) => b.score - a.score).slice(0, 8);
+    
+    if (related.length === 0) {
+        section.classList.add('hidden');
+    } else {
+        section.classList.remove('hidden');
+        container.innerHTML = related.map(({ keyword }) => {
+            const d = extendedData[keyword];
+            const tagClass = `tag-${d.trendTag}`;
+            return `
+                <button onclick="selectKeyword('${keyword}')" 
+                    class="px-3 py-1.5 bg-gray-100 hover:bg-blue-100 rounded-full text-sm flex items-center gap-2 transition-colors">
+                    <span>${keyword}</span>
+                    <span class="text-xs ${d.growth > 0 ? 'text-green-600' : 'text-red-600'}">${d.growth > 0 ? '+' : ''}${d.growth.toFixed(0)}%</span>
+                </button>
+            `;
+        }).join('');
+    }
 }
 
 function showDrillDown(date) {
