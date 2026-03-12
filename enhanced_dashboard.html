@@ -670,12 +670,52 @@ async function loadData() {
 function processData() {
     extendedData = {};
     const seasonalPatterns = {
-        "书包": "spring", "学生书包": "summer",
-        "帽子": "summer", "鸭舌帽": "summer", "遮阳帽": "summer",
-        "围巾": "winter", "手套": "winter", "冷帽": "winter", "披肩": "winter",
-        "皮带": "all", "腰带": "all", "挂件": "all",
+        // 春季品类（开学季）
+        "书包": "spring", "学生书包": "spring", "双肩包": "spring", "背包": "spring",
+        "旅行包": "summer", "登山包": "autumn", "电脑包": "all",
+        // 夏季品类
+        "帽子": "summer", "鸭舌帽": "summer", "遮阳帽": "summer", "棒球帽": "summer", "渔夫帽": "summer", "草帽": "summer",
+        "防晒面罩": "summer", "防晒口罩": "summer", "防晒袖套": "summer", "袖套": "summer",
+        // 冬季品类
+        "围巾": "winter", "丝巾": "winter", "披肩": "winter", "围脖": "winter",
+        "手套": "winter", "保暖手套": "winter", "皮手套": "winter", "针织手套": "winter",
+        "冷帽": "winter", "毛线帽": "winter", "雷锋帽": "winter",
+        // 全年稳定
+        "皮带": "all", "腰带": "all", "挂件": "all", "钥匙扣": "all",
+        "鞋垫": "all", "增高鞋垫": "all", "运动鞋垫": "all",
+        // 爆发期
         "饺子包": "explosive", "法棍包": "explosive"
     };
+    
+    // 辅助函数：根据关键词推断季节性
+    function getSeasonFromKeyword(keyword) {
+        // 直接匹配
+        if (seasonalPatterns[keyword]) {
+            return seasonalPatterns[keyword];
+        }
+        // 根据包含词推断
+        if (keyword.includes('书包') || keyword.includes('双肩包') || keyword.includes('背包')) {
+            if (keyword.includes('旅行')) return 'summer';
+            if (keyword.includes('登山')) return 'autumn';
+            return 'spring'; // 默认书包类春季
+        }
+        if (keyword.includes('帽子') || keyword.includes('鸭舌帽') || keyword.includes('遮阳帽') || 
+            keyword.includes('棒球帽') || keyword.includes('渔夫帽') || keyword.includes('草帽')) {
+            return 'summer';
+        }
+        if (keyword.includes('冷帽') || keyword.includes('毛线帽') || keyword.includes('雷锋帽') || 
+            keyword.includes('保暖帽')) {
+            return 'winter';
+        }
+        if (keyword.includes('围巾') || keyword.includes('丝巾') || keyword.includes('披肩') || 
+            keyword.includes('围脖') || keyword.includes('手套') || keyword.includes('保暖')) {
+            return 'winter';
+        }
+        if (keyword.includes('防晒') || keyword.includes('遮阳') || keyword.includes('冰袖')) {
+            return 'summer';
+        }
+        return 'all';
+    }
     
     Object.keys(rawData).forEach(keyword => {
         const data = rawData[keyword];
@@ -742,7 +782,7 @@ function processData() {
             trendTag,
             isAnomaly,
             spikeRatio,
-            season: seasonalPatterns[keyword] || 'all'
+            season: getSeasonFromKeyword(keyword)
         };
     });
 }
