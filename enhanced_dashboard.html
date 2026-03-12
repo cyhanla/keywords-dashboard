@@ -256,6 +256,19 @@
                             <button onclick="setTimeRange(90)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">90天</button>
                             <button onclick="setTimeRange(365)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">1年</button>
                         </div>
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+                                <input type="checkbox" id="showAvgLine" onchange="renderChart()" class="rounded">
+                                <span>平均值线</span>
+                            </label>
+                            <label class="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+                                <input type="checkbox" id="showTargetLine" onchange="renderChart()" class="rounded">
+                                <span>目标值</span>
+                            </label>
+                            <input type="number" id="targetValueInput" placeholder="输入目标值" 
+                                   class="w-20 px-2 py-1 text-xs border rounded" 
+                                   onchange="if(document.getElementById('showTargetLine').checked) renderChart()">
+                        </div>
                     </div>
                     <div class="h-80">
                         <canvas id="trendChart"></canvas>
@@ -1512,6 +1525,46 @@ function renderChart() {
             pointHoverRadius: 6
         };
     });
+    
+    // 添加平均值线
+    const showAvgLine = document.getElementById('showAvgLine')?.checked;
+    if (showAvgLine && keywordsToShow.length > 0) {
+        const dailyData = extendedData[keywordsToShow[0]].dailyData || extendedData[keywordsToShow[0]].data;
+        const sliceStart = Math.max(0, dailyData.length - timeRange);
+        const sliced = dailyData.slice(sliceStart);
+        const avg = Math.round(sliced.reduce((a, b) => a + b.value, 0) / sliced.length);
+        
+        datasets.push({
+            label: '平均值',
+            data: new Array(sliced.length).fill(avg),
+            borderColor: '#9ca3af',
+            borderDash: [5, 5],
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            tension: 0
+        });
+    }
+    
+    // 添加目标值线
+    const showTargetLine = document.getElementById('showTargetLine')?.checked;
+    const targetValue = parseInt(document.getElementById('targetValueInput')?.value);
+    if (showTargetLine && !isNaN(targetValue) && keywordsToShow.length > 0) {
+        const dailyData = extendedData[keywordsToShow[0]].dailyData || extendedData[keywordsToShow[0]].data;
+        const sliceStart = Math.max(0, dailyData.length - timeRange);
+        const sliced = dailyData.slice(sliceStart);
+        
+        datasets.push({
+            label: '目标值',
+            data: new Array(sliced.length).fill(targetValue),
+            borderColor: '#f59e0b',
+            borderDash: [10, 5],
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            tension: 0
+        });
+    }
     
     // 使用日级别数据生成标签
     const dailyData = extendedData[currentKeyword].dailyData || extendedData[currentKeyword].data;
