@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>明然居数据看板 - 增强版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans SC', sans-serif; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .trend-tag { @apply px-2 py-0.5 text-xs rounded-full font-medium; }
+        .tag-rising { @apply bg-green-100 text-green-700; }
+        .tag-explosive { @apply bg-red-100 text-red-700; }
+        .tag-falling { @apply bg-orange-100 text-orange-700; }
+        .tag-stable { @apply bg-blue-100 text-blue-700; }
+        .kw-item { cursor: pointer; transition: all 0.2s; }
+        .kw-item:hover { background: #f9fafb; }
+        .kw-item.selected { background: #eff6ff; border-left: 3px solid #3b82f6; }
+        .kw-item.comparing { background: #fef3c7; border-left: 3px solid #f59e0b; }
+        .compare-checkbox { @apply w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+        .anomaly-badge { @apply inline-flex items-center px-1.5 py-0.5 text-xs bg-red-500 text-white rounded animate-pulse; }
+        .season-alert { @apply flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { @apply bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xl">
+                        📊
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-900">明然居数据看板</h1>
+                        <p class="text-sm text-gray-500">智能趋势分析 · 异常预警 · 关键词监控</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button onclick="openAlertSettings()" class="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors">
+                        <span>🔔</span>
+                        <span class="font-medium">预警设置</span>
+                        <span id="alertCount" class="hidden px-1.5 py-0.5 bg-amber-500 text-white text-xs rounded-full">0</span>
+                    </button>
+                    <button onclick="openFavorites()" class="flex items-center gap-2 px-4 py-2 bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200 transition-colors">
+                        <span>⭐</span>
+                        <span class="font-medium">我的关注</span>
+                        <span id="favCount" class="hidden px-1.5 py-0.5 bg-pink-500 text-white text-xs rounded-full">0</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Seasonal Alerts Banner -->
+    <div id="seasonalAlerts" class="max-w-7xl mx-auto px-4 mt-4">
+        <!-- Dynamic seasonal alerts will be inserted here -->
+    </div>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+                <div class="text-sm text-gray-500 mb-1">监控关键词</div>
+                <div class="text-2xl font-bold text-gray-900" id="totalKeywords">-</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+                <div class="text-sm text-gray-500 mb-1">趋势上升</div>
+                <div class="text-2xl font-bold text-green-600" id="trendingCount">-</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+                <div class="text-sm text-gray-500 mb-1">异常波动</div>
+                <div class="text-2xl font-bold text-red-600" id="anomalyCount">-</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+                <div class="text-sm text-gray-500 mb-1">爆发期词</div>
+                <div class="text-2xl font-bold text-red-600" id="explosiveCount">-</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm card-hover">
+                <div class="text-sm text-gray-500 mb-1">季节性预警</div>
+                <div class="text-2xl font-bold text-amber-600" id="seasonCount">-</div>
+            </div>
+        </div>
+
+        <!-- Smart Filters -->
+        <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700">排序：</span>
+                    <select id="sortBy" onchange="applyFilters()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="growth">涨幅排序</option>
+                        <option value="acceleration">加速度排序</option>
+                        <option value="stability">稳定性排序</option>
+                        <option value="volume">搜索量排序</option>
+                        <option value="conversion">转化率排序</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700">趋势：</span>
+                    <select id="trendFilter" onchange="applyFilters()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="all">全部</option>
+                        <option value="explosive">🔥 爆发期</option>
+                        <option value="rising">📈 上升期</option>
+                        <option value="stable">➡️ 稳定期</option>
+                        <option value="falling">📉 回落期</option>
+                        <option value="anomaly">⚠️ 异常</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700">季节：</span>
+                    <select id="seasonFilter" onchange="applyFilters()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="all">全部</option>
+                        <option value="spring">🌸 春季热词</option>
+                        <option value="summer">☀️ 夏季热词</option>
+                        <option value="autumn">🍂 秋季热词</option>
+                        <option value="winter">❄️ 冬季热词</option>
+                        <option value="upcoming">⏰ 即将升温</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2 ml-auto">
+                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input type="checkbox" id="compareMode" onchange="toggleCompareMode()" class="rounded border-gray-300 text-blue-600">
+                        <span>对比模式（最多选3个）</span>
+                    </label>
+                    <button onclick="clearComparison()" id="clearCompareBtn" class="hidden px-3 py-1 text-sm text-gray-500 hover:text-gray-700">
+                        清除对比
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div class="flex gap-3">
+                <div class="flex-1 relative">
+                    <input type="text" id="searchInput" placeholder="输入关键词查询趋势（支持模糊搜索）..." 
+                           class="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <svg class="w-5 h-5 text-gray-400 absolute left-3 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <button onclick="searchKeyword()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">查询</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: Keyword List -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+                        <h2 class="font-semibold text-gray-900">📋 关键词列表</h2>
+                        <span id="filteredCount" class="text-xs text-gray-500"></span>
+                    </div>
+                    <div id="keywordList" class="max-h-[600px] overflow-y-auto">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Chart & Details -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Chart -->
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-semibold text-gray-900" id="chartTitle">点击左侧关键词查看趋势</h2>
+                        <div class="flex gap-2" id="timeRangeButtons">
+                            <button onclick="setTimeRange(7)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">7天</button>
+                            <button onclick="setTimeRange(30)" class="time-btn px-3 py-1 text-sm rounded bg-blue-100 text-blue-700">30天</button>
+                            <button onclick="setTimeRange(90)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">90天</button>
+                            <button onclick="setTimeRange(365)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">1年</button>
+                        </div>
+                    </div>
+                    <div class="h-80">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Detail Cards -->
+                <div id="detailSection" class="hidden">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div class="bg-white rounded-xl p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">当前指数</div>
+                            <div class="text-xl font-bold text-gray-900" id="detailCurrent">-</div>
+                        </div>
+                        <div class="bg-white rounded-xl p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">近期平均</div>
+                            <div class="text-xl font-bold text-gray-900" id="detailRecent">-</div>
+                        </div>
+                        <div class="bg-white rounded-xl p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">涨幅</div>
+                            <div class="text-xl font-bold" id="detailGrowth">-</div>
+                        </div>
+                        <div class="bg-white rounded-xl p-4 shadow-sm">
+                            <div class="text-sm text-gray-500 mb-1">支付转化率</div>
+                            <div class="text-xl font-bold text-purple-600" id="detailConversion">-</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Extended Analysis -->
+                    <div class="bg-white rounded-xl shadow-sm p-4">
+                        <h3 class="font-semibold text-gray-900 mb-4">📊 深度分析</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <div class="text-xs text-gray-500 mb-1">竞争度</div>
+                                <div class="text-lg font-bold text-gray-900" id="detailCompetition">-</div>
+                                <div class="text-xs text-gray-400 mt-1">商品数: <span id="detailProducts">-</span></div>
+                            </div>
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <div class="text-xs text-gray-500 mb-1">均价</div>
+                                <div class="text-lg font-bold text-gray-900" id="detailAvgPrice">-</div>
+                                <div class="text-xs text-gray-400 mt-1">环比: <span id="detailPriceChange">-</span></div>
+                            </div>
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <div class="text-xs text-gray-500 mb-1">稳定性评分</div>
+                                <div class="text-lg font-bold text-gray-900" id="detailStability">-</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                                    <div id="stabilityBar" class="bg-blue-500 h-1.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <div class="text-xs text-gray-500 mb-1">增长加速度</div>
+                                <div class="text-lg font-bold text-gray-900" id="detailAcceleration">-</div>
+                                <div class="text-xs text-gray-400 mt-1">较上周变化</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Alert Settings Modal -->
+    <div id="alertModal" class="modal">
+        <div class="modal-content">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-bold text-gray-900">🔔 预警设置</h3>
+                <button onclick="closeModal('alertModal')" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">单日暴涨预警</div>
+                            <div class="text-sm text-gray-500">当关键词单日涨幅超过设定值时提醒</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="alertSpike" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">连续上涨预警</div>
+                            <div class="text-sm text-gray-500">连续3天以上上涨时提醒</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="alertConsecutive" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">异常波动预警</div>
+                            <div class="text-sm text-gray-500">检测到的异常波动即时提醒</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="alertAnomaly" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">季节性提醒</div>
+                            <div class="text-sm text-gray-500">提前2周提醒季节性热词</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="alertSeasonal" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div class="font-medium text-amber-800 mb-2">阈值设置</div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm text-gray-600">单日涨幅超过</span>
+                            <input type="number" id="spikeThreshold" value="30" class="w-20 px-2 py-1 border rounded text-center">
+                            <span class="text-sm text-gray-600">% 时触发预警</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+                <button onclick="closeModal('alertModal')" class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                <button onclick="saveAlertSettings()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Favorites Modal -->
+    <div id="favoritesModal" class="modal">
+        <div class="modal-content">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-bold text-gray-900">⭐ 我的关注</h3>
+                <button onclick="closeModal('favoritesModal')" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <div id="favoritesList" class="space-y-2">
+                    <!-- Dynamic favorites list -->
+                </div>
+                <div id="noFavorites" class="text-center text-gray-500 py-8">
+                    还没有关注任何关键词<br>
+                    <span class="text-sm">点击关键词旁的 ⭐ 添加到关注</span>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t bg-gray-50">
+                <button onclick="generateReport()" class="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">
+                    <span>📧</span>
+                    <span>生成关注词报告</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content max-w-lg">
+            <div class="px-6 py-4 border-b">
+                <h3 class="text-lg font-bold text-gray-900">📊 关注词报告</h3>
+            </div>
+            <div class="p-6">
+                <div id="reportContent" class="bg-gray-50 rounded-lg p-4 text-sm font-mono whitespace-pre-wrap max-h-[50vh] overflow-y-auto">
+                    <!-- Report content -->
+                </div>
+                <div class="mt-4 flex gap-3">
+                    <button onclick="copyReport()" class="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">复制报告</button>
+                    <button onclick="closeModal('reportModal')" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+// 扩展数据生成（模拟竞争度、商品数、均价等）
+const extendedData = {};
+const seasonalPatterns = {
+    "书包": "spring", "学生书包": "summer",
+    "帽子": "summer", "鸭舌帽": "summer", "遮阳帽": "summer",
+    "围巾": "winter", "手套": "winter", "冷帽": "winter", "披肩": "winter",
+    "皮带": "all", "腰带": "all", "挂件": "all",
+    "饺子包": "explosive", "法棍包": "explosive"
+};
+
+Object.keys(rawData).forEach(keyword => {
+    const data = rawData[keyword];
+    const values = data.map(d => d.value);
+    const recent = values.slice(-3);
+    const previous = values.slice(-6, -3);
+    
+    const current = values[values.length - 1];
+    const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+    const prevAvg = previous.length > 0 ? previous.reduce((a, b) => a + b, 0) / previous.length : avg;
+    const growth = prevAvg > 0 ? ((avg - prevAvg) / prevAvg * 100) : 0;
+    
+    // 计算稳定性（变异系数的倒数）
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+    const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
+    const stability = Math.max(0, Math.min(100, (1 - cv) * 100));
+    
+    // 计算加速度（增长率的变化）
+    const older = values.slice(-9, -6);
+    const olderAvg = older.length > 0 ? older.reduce((a, b) => a + b, 0) / older.length : prevAvg;
+    const prevGrowth = olderAvg > 0 ? ((prevAvg - olderAvg) / olderAvg * 100) : 0;
+    const acceleration = growth - prevGrowth;
+    
+    // 模拟竞争度（基于搜索量，越高竞争越大）
+    const competition = Math.min(100, Math.round(current / 50000 + Math.random() * 20));
+    const productCount = Math.round(current * 0.1 + Math.random() * 1000);
+    
+    // 模拟均价（60-300之间）
+    const avgPrice = Math.round(60 + Math.random() * 240);
+    const priceChange = (Math.random() - 0.5) * 20;
+    
+    // 模拟转化率（1-15%）
+    const conversion = (1 + Math.random() * 14).toFixed(2);
+    
+    // 趋势标签
+    let trendTag = 'stable';
+    if (growth > 30 || acceleration > 20) trendTag = 'explosive';
+    else if (growth > 15) trendTag = 'rising';
+    else if (growth < -10) trendTag = 'falling';
+    
+    // 异常检测
+    const lastValue = values[values.length - 1];
+    const secondLast = values[values.length - 2];
+    const spikeRatio = secondLast > 0 ? (lastValue - secondLast) / secondLast : 0;
+    const isAnomaly = Math.abs(spikeRatio) > 0.5; // 单日波动超过50%视为异常
+    
+    extendedData[keyword] = {
+        data,
+        current,
+        avg,
+        growth,
+        stability,
+        acceleration,
+        competition,
+        productCount,
+        avgPrice,
+        priceChange,
+        conversion,
+        trendTag,
+        isAnomaly,
+        spikeRatio,
+        season: seasonalPatterns[keyword] || 'all'
+    };
+});
+
+// 全局状态
+let currentKeyword = null;
+let comparingKeywords = [];
+let favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
+let chart = null;
+let timeRange = 30;
+let compareMode = false;
+
+// ==================== 初始化 ====================
+
+function init() {
+    renderKeywordList();
+    renderSeasonalAlerts();
+    updateStats();
+    updateFavCount();
+    initChart();
+}
+
+// ==================== 季节性预警 ====================
+
+function renderSeasonalAlerts() {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const alerts = [];
+    
+    // 根据当前月份生成季节性预警
+    if (month >= 2 && month <= 3) {
+        alerts.push({
+            icon: '🌸',
+            text: '春季品类（书包、旅行包）即将进入旺季，建议提前备货',
+            keywords: ['书包', '旅行包']
+        });
+    }
+    if (month >= 4 && month <= 5) {
+        alerts.push({
+            icon: '☀️',
+            text: '夏季热词（帽子、遮阳帽、鸭舌帽）搜索量开始上升',
+            keywords: ['帽子', '鸭舌帽', '遮阳帽']
+        });
+    }
+    if (month >= 8 && month <= 9) {
+        alerts.push({
+            icon: '🍂',
+            text: '秋冬品类（围巾、手套、冷帽）即将升温',
+            keywords: ['围巾', '手套', '冷帽', '披肩']
+        });
+    }
+    if (month >= 11 || month <= 1) {
+        alerts.push({
+            icon: '❄️',
+            text: '冬季热词处于高峰期，关注库存和竞品动态',
+            keywords: ['围巾', '手套', '冷帽']
+        });
+    }
+    
+    const container = document.getElementById('seasonalAlerts');
+    container.innerHTML = alerts.map(alert => `
+        <div class="season-alert mb-2">
+            <span class="text-lg">${alert.icon}</span>
+            <span>${alert.text}</span>
+        </div>
+    `).join('');
+    
+    document.getElementById('seasonCount').textContent = alerts.length;
+}
+
+// ==================== 关键词列表渲染 ====================
+
+function renderKeywordList() {
+    const container = document.getElementById('keywordList');
+    const sortBy = document.getElementById('sortBy').value;
+    const trendFilter = document.getElementById('trendFilter').value;
+    const seasonFilter = document.getElementById('seasonFilter').value;
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    
+    let keywords = Object.keys(extendedData);
+    
+    // 搜索过滤
+    if (searchTerm) {
+        keywords = keywords.filter(k => k.toLowerCase().includes(searchTerm));
+    }
+    
+    // 趋势过滤
+    if (trendFilter !== 'all') {
+        if (trendFilter === 'anomaly') {
+            keywords = keywords.filter(k => extendedData[k].isAnomaly);
+        } else {
+            keywords = keywords.filter(k => extendedData[k].trendTag === trendFilter);
+        }
+    }
+    
+    // 季节过滤
+    if (seasonFilter !== 'all') {
+        keywords = keywords.filter(k => {
+            const season = extendedData[k].season;
+            if (seasonFilter === 'upcoming') {
+                return isUpcomingSeason(season);
+            }
+            return season === seasonFilter || season === 'all';
+        });
+    }
+    
+    // 排序
+    keywords.sort((a, b) => {
+        const da = extendedData[a];
+        const db = extendedData[b];
+        switch(sortBy) {
+            case 'growth': return db.growth - da.growth;
+            case 'acceleration': return db.acceleration - da.acceleration;
+            case 'stability': return db.stability - da.stability;
+            case 'volume': return db.current - da.current;
+            case 'conversion': return parseFloat(db.conversion) - parseFloat(da.conversion);
+            default: return 0;
+        }
+    });
+    
+    document.getElementById('filteredCount').textContent = `${keywords.length} 个关键词`;
+    
+    container.innerHTML = keywords.map(keyword => {
+        const d = extendedData[keyword];
+        const isFav = favorites.includes(keyword);
+        const tagClass = `tag-${d.trendTag}`;
+        const tagText = {
+            'explosive': '🔥爆发',
+            'rising': '📈上升',
+            'stable': '➡️稳定',
+            'falling': '📉回落'
+        }[d.trendTag] || d.trendTag;
+        
+        return `
+            <div class="kw-item px-4 py-3 border-b ${currentKeyword === keyword ? 'selected' : ''} ${comparingKeywords.includes(keyword) ? 'comparing' : ''}" 
+                 data-keyword="${keyword}">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        ${compareMode ? `<input type="checkbox" class="compare-checkbox" 
+                            ${comparingKeywords.includes(keyword) ? 'checked' : ''}
+                            ${comparingKeywords.length >= 3 && !comparingKeywords.includes(keyword) ? 'disabled' : ''}
+                            onchange="toggleCompare('${keyword}')">` : ''}
+                        <span class="font-medium text-gray-900">${keyword}</span>
+                        ${d.isAnomaly ? '<span class="anomaly-badge">异常</span>' : ''}
+                    </div>
+                    <button onclick="event.stopPropagation(); toggleFavorite('${keyword}')" 
+                            class="text-lg ${isFav ? 'text-pink-500' : 'text-gray-300 hover:text-pink-400'}">
+                        ${isFav ? '⭐' : '☆'}
+                    </button>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                    <span class="trend-tag ${tagClass}">${tagText}</span>
+                    <span class="text-xs ${d.growth > 0 ? 'text-green-600' : 'text-red-600'}">
+                        ${d.growth > 0 ? '+' : ''}${d.growth.toFixed(1)}%
+                    </span>
+                    <span class="text-xs text-gray-400">稳定性: ${d.stability.toFixed(0)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // 添加点击事件
+    container.querySelectorAll('.kw-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') {
+                const kw = item.dataset.keyword;
+                selectKeyword(kw);
+            }
+        });
+    });
+}
+
+function isUpcomingSeason(season) {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    if (season === 'spring' && (month >= 1 && month <= 2)) return true;
+    if (season === 'summer' && (month >= 3 && month <= 4)) return true;
+    if (season === 'autumn' && (month >= 7 && month <= 8)) return true;
+    if (season === 'winter' && (month >= 9 && month <= 10)) return true;
+    return false;
+}
+
+// ==================== 选择和对比 ====================
+
+function selectKeyword(keyword) {
+    currentKeyword = keyword;
+    if (!compareMode) {
+        comparingKeywords = [];
+    }
+    renderKeywordList();
+    renderChart();
+    renderDetails();
+}
+
+function toggleCompareMode() {
+    compareMode = document.getElementById('compareMode').checked;
+    document.getElementById('clearCompareBtn').classList.toggle('hidden', !compareMode);
+    if (!compareMode) {
+        comparingKeywords = [];
+    }
+    renderKeywordList();
+    renderChart();
+}
+
+function toggleCompare(keyword) {
+    const idx = comparingKeywords.indexOf(keyword);
+    if (idx > -1) {
+        comparingKeywords.splice(idx, 1);
+    } else if (comparingKeywords.length < 3) {
+        comparingKeywords.push(keyword);
+    }
+    renderKeywordList();
+    renderChart();
+}
+
+function clearComparison() {
+    comparingKeywords = [];
+    renderKeywordList();
+    renderChart();
+}
+
+// ==================== 图表渲染 ====================
+
+function initChart() {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value >= 10000 ? (value/10000).toFixed(1) + '万' : value;
+                        }
+                    }
+                }
+            },
+            onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    const date = chart.data.labels[index];
+                    showDrillDown(date);
+                }
+            }
+        }
+    });
+}
+
+function renderChart() {
+    if (!currentKeyword) return;
+    
+    const keywordsToShow = comparingKeywords.length > 0 
+        ? [currentKeyword, ...comparingKeywords.filter(k => k !== currentKeyword)]
+        : [currentKeyword];
+    
+    document.getElementById('chartTitle').textContent = 
+        comparingKeywords.length > 0 
+            ? `对比: ${keywordsToShow.join(' vs ')}`
+            : `趋势: ${currentKeyword}`;
+    
+    const colors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981'];
+    
+    const datasets = keywordsToShow.map((kw, idx) => {
+        const data = extendedData[kw].data;
+        const sliceStart = Math.max(0, data.length - Math.ceil(timeRange / 30));
+        const sliced = data.slice(sliceStart);
+        
+        return {
+            label: kw,
+            data: sliced.map(d => d.value),
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length] + '20',
+            fill: comparingKeywords.length === 0,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5
+        };
+    });
+    
+    const labels = extendedData[currentKeyword].data
+        .slice(Math.max(0, extendedData[currentKeyword].data.length - Math.ceil(timeRange / 30)))
+        .map(d => d.date.slice(5)); // MM-DD
+    
+    chart.data.labels = labels;
+    chart.data.datasets = datasets;
+    chart.update();
+}
+
+function setTimeRange(days) {
+    timeRange = days;
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-100', 'text-blue-700');
+        btn.classList.add('bg-gray-100');
+    });
+    event.target.classList.remove('bg-gray-100');
+    event.target.classList.add('bg-blue-100', 'text-blue-700');
+    renderChart();
+}
+
+// ==================== 详情渲染 ====================
+
+function renderDetails() {
+    if (!currentKeyword) return;
+    
+    const d = extendedData[currentKeyword];
+    document.getElementById('detailSection').classList.remove('hidden');
+    
+    document.getElementById('detailCurrent').textContent = d.current.toLocaleString();
+    document.getElementById('detailRecent').textContent = Math.round(d.avg).toLocaleString();
+    document.getElementById('detailGrowth').textContent = (d.growth > 0 ? '+' : '') + d.growth.toFixed(1) + '%';
+    document.getElementById('detailGrowth').className = 'text-xl font-bold ' + (d.growth > 0 ? 'text-green-600' : 'text-red-600');
+    document.getElementById('detailConversion').textContent = d.conversion + '%';
+    
+    // 扩展信息
+    document.getElementById('detailCompetition').textContent = d.competition + '/100';
+    document.getElementById('detailCompetition').className = 'text-lg font-bold ' + (d.competition > 70 ? 'text-red-600' : d.competition > 40 ? 'text-amber-600' : 'text-green-600');
+    document.getElementById('detailProducts').textContent = d.productCount.toLocaleString();
+    document.getElementById('detailAvgPrice').textContent = '¥' + d.avgPrice;
+    document.getElementById('detailPriceChange').textContent = (d.priceChange > 0 ? '+' : '') + d.priceChange.toFixed(1) + '%';
+    document.getElementById('detailPriceChange').className = d.priceChange > 0 ? 'text-green-600' : 'text-red-600';
+    document.getElementById('detailStability').textContent = d.stability.toFixed(0);
+    document.getElementById('stabilityBar').style.width = d.stability + '%';
+    document.getElementById('detailAcceleration').textContent = (d.acceleration > 0 ? '+' : '') + d.acceleration.toFixed(1) + '%';
+    document.getElementById('detailAcceleration').className = 'text-lg font-bold ' + (d.acceleration > 0 ? 'text-green-600' : 'text-red-600');
+}
+
+function showDrillDown(date) {
+    if (!currentKeyword) return;
+    const d = extendedData[currentKeyword];
+    alert(`${currentKeyword} - ${date}\n\n竞争度: ${d.competition}/100\n商品数: ${d.productCount.toLocaleString()}\n均价: ¥${d.avgPrice}\n建议: ${d.competition > 70 ? '竞争激烈，谨慎投入' : d.competition < 40 ? '竞争较小，机会较大' : '竞争适中，正常运营'}`);
+}
+
+// ==================== 收藏功能 ====================
+
+function toggleFavorite(keyword) {
+    const idx = favorites.indexOf(keyword);
+    if (idx > -1) {
+        favorites.splice(idx, 1);
+    } else {
+        favorites.push(keyword);
+    }
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+    updateFavCount();
+    renderKeywordList();
+}
+
+function updateFavCount() {
+    const count = favorites.length;
+    const badge = document.getElementById('favCount');
+    badge.textContent = count;
+    badge.classList.toggle('hidden', count === 0);
+}
+
+function openFavorites() {
+    const list = document.getElementById('favoritesList');
+    const empty = document.getElementById('noFavorites');
+    
+    if (favorites.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+    } else {
+        empty.classList.add('hidden');
+        list.innerHTML = favorites.map(kw => {
+            const d = extendedData[kw];
+            return `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                        <div class="font-medium">${kw}</div>
+                        <div class="text-sm text-gray-500">涨幅: ${d.growth > 0 ? '+' : ''}${d.growth.toFixed(1)}%</div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="selectKeyword('${kw}'); closeModal('favoritesModal');" 
+                                class="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                            查看
+                        </button>
+                        <button onclick="toggleFavorite('${kw}'); openFavorites();" 
+                                class="text-red-500 hover:text-red-700">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    document.getElementById('favoritesModal').classList.add('active');
+}
+
+// ==================== 报告生成 ====================
+
+function generateReport() {
+    if (favorites.length === 0) {
+        alert('请先添加关注的关键词');
+        return;
+    }
+    
+    const now = new Date().toLocaleString('zh-CN');
+    let report = `📊 明然居关键词监控报告\n`;
+    report += `生成时间: ${now}\n`;
+    report += `关注词数量: ${favorites.length}\n`;
+    report += `\n━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    favorites.forEach(kw => {
+        const d = extendedData[kw];
+        report += `📌 ${kw}\n`;
+        report += `   当前指数: ${d.current.toLocaleString()}\n`;
+        report += `   涨跌幅: ${d.growth > 0 ? '+' : ''}${d.growth.toFixed(1)}%\n`;
+        report += `   趋势状态: ${d.trendTag === 'explosive' ? '🔥爆发期' : d.trendTag === 'rising' ? '📈上升期' : d.trendTag === 'falling' ? '📉回落期' : '➡️稳定期'}\n`;
+        report += `   竞争度: ${d.competition}/100\n`;
+        if (d.isAnomaly) report += `   ⚠️ 检测到异常波动\n`;
+        report += `\n`;
+    });
+    
+    report += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+    report += `💡 建议: 重点关注爆发期和上升期关键词，关注竞争度较低的机会词。\n`;
+    
+    document.getElementById('reportContent').textContent = report;
+    closeModal('favoritesModal');
+    document.getElementById('reportModal').classList.add('active');
+}
+
+function copyReport() {
+    const report = document.getElementById('reportContent').textContent;
+    navigator.clipboard.writeText(report).then(() => {
+        alert('报告已复制到剪贴板');
+    });
+}
+
+// ==================== 预警设置 ====================
+
+function openAlertSettings() {
+    document.getElementById('alertModal').classList.add('active');
+}
+
+function saveAlertSettings() {
+    const settings = {
+        spike: document.getElementById('alertSpike').checked,
+        consecutive: document.getElementById('alertConsecutive').checked,
+        anomaly: document.getElementById('alertAnomaly').checked,
+        seasonal: document.getElementById('alertSeasonal').checked,
+        spikeThreshold: parseInt(document.getElementById('spikeThreshold').value)
+    };
+    localStorage.setItem('alertSettings', JSON.stringify(settings));
+    closeModal('alertModal');
+    alert('预警设置已保存');
+}
+
+// ==================== 统计更新 ====================
+
+function updateStats() {
+    const keywords = Object.keys(extendedData);
+    document.getElementById('totalKeywords').textContent = keywords.length;
+    
+    const trending = keywords.filter(k => extendedData[k].growth > 15);
+    document.getElementById('trendingCount').textContent = trending.length;
+    
+    const anomalies = keywords.filter(k => extendedData[k].isAnomaly);
+    document.getElementById('anomalyCount').textContent = anomalies.length;
+    
+    const explosive = keywords.filter(k => extendedData[k].trendTag === 'explosive');
+    document.getElementById('explosiveCount').textContent = explosive.length;
+}
+
+// ==================== 工具函数 ====================
+
+function searchKeyword() {
+    renderKeywordList();
+}
+
+function applyFilters() {
+    renderKeywordList();
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+}
+
+// 点击模态框外部关闭
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('active');
+        }
+    });
+});
+
+// 初始化
+document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
