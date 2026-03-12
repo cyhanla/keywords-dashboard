@@ -221,6 +221,18 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left: Keyword List -->
             <div class="lg:col-span-1">
+                <!-- 标签筛选 -->
+                <div class="bg-white rounded-xl shadow-sm p-3 mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-gray-700">🏷️ 标签筛选</span>
+                        <button onclick="openTagManager()" class="text-xs text-blue-600 hover:text-blue-800">管理</button>
+                    </div>
+                    <div id="tagFilterList" class="flex flex-wrap gap-2">
+                        <button onclick="filterByTag('all')" class="tag-filter px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700" data-tag="all">全部</button>
+                        <!-- Dynamic tags -->
+                    </div>
+                </div>
+
                 <div class="bg-white rounded-xl shadow-sm overflow-hidden">
                     <div class="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
                         <h2 class="font-semibold text-gray-900">📋 关键词列表</h2>
@@ -293,8 +305,25 @@
                         </div>
                     </div>
                     
+                    <!-- Keyword Tags -->
+                    <div class="bg-white rounded-xl shadow-sm p-4 mt-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-semibold text-gray-900">🏷️ 关键词标签</h3>
+                            <span class="text-xs text-gray-500">点击添加/移除标签</span>
+                        </div>
+                        <div id="keywordTags" class="flex flex-wrap gap-2 mb-3">
+                            <!-- Dynamic tags for current keyword -->
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="newTagInput" placeholder="输入新标签..." 
+                                   class="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                   onkeydown="if(event.key==='Enter')addTagToCurrentKeyword()">
+                            <button onclick="addTagToCurrentKeyword()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">添加</button>
+                        </div>
+                    </div>
+                    
                     <!-- Extended Analysis -->
-                    <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="bg-white rounded-xl shadow-sm p-4 mt-4">
                         <h3 class="font-semibold text-gray-900 mb-4">📊 深度分析</h3>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div class="p-3 bg-gray-50 rounded-lg">
@@ -606,6 +635,8 @@ loadData();
 let currentKeyword = null;
 let comparingKeywords = [];
 let favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
+let keywordTags = JSON.parse(localStorage.getItem('keywordTags') || '{}');
+let currentTagFilter = 'all';
 let chart = null;
 let predictionChart = null;
 let timeRange = 30;
@@ -680,6 +711,7 @@ function downloadFile(content, filename, mimeType) {
 function init() {
     initDarkMode();
     renderSearchHistory();
+    renderTagFilters();
     initChart();
     initPredictionChart();
     renderKeywordList();
@@ -789,6 +821,138 @@ function filterByType(type) {
     // 渲染列表并滚动到顶部
     renderKeywordList();
     document.getElementById('keywordList').scrollTop = 0;
+}
+
+// ==================== 标签管理 ====================
+
+function getAllTags() {
+    const tags = new Set();
+    Object.values(keywordTags).forEach(tagList => {
+        tagList.forEach(tag => tags.add(tag));
+    });
+    return Array.from(tags).sort();
+}
+
+function renderTagFilters() {
+    const container = document.getElementById('tagFilterList');
+    const allTags = getAllTags();
+    
+    let html = `<button onclick="filterByTag('all')" class="tag-filter px-2 py-1 text-xs rounded-full ${currentTagFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}" data-tag="all">全部</button>`;
+    
+    allTags.forEach(tag => {
+        const isActive = currentTagFilter === tag;
+        html += `<button onclick="filterByTag('${tag}')" class="tag-filter px-2 py-1 text-xs rounded-full ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}" data-tag="${tag}">${tag}</button>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+function filterByTag(tag) {
+    currentTagFilter = tag;
+    renderTagFilters();
+    renderKeywordList();
+}
+
+function getKeywordTags(keyword) {
+    return keywordTags[keyword] || [];
+}
+
+function addTagToKeyword(keyword, tag) {
+    if (!keywordTags[keyword]) {
+        keywordTags[keyword] = [];
+    }
+    if (!keywordTags[keyword].includes(tag)) {
+        keywordTags[keyword].push(tag);
+        localStorage.setItem('keywordTags', JSON.stringify(keywordTags));
+    }
+    renderKeywordTags(keyword);
+    renderTagFilters();
+}
+
+function removeTagFromKeyword(keyword, tag) {
+    if (keywordTags[keyword]) {
+        keywordTags[keyword] = keywordTags[keyword].filter(t => t !== tag);
+        if (keywordTags[keyword].length === 0) {
+            delete keywordTags[keyword];
+        }
+        localStorage.setItem('keywordTags', JSON.stringify(keywordTags));
+    }
+    renderKeywordTags(keyword);
+    renderTagFilters();
+}
+
+function renderKeywordTags(keyword) {
+    const container = document.getElementById('keywordTags');
+    const tags = getKeywordTags(keyword);
+    
+    if (tags.length === 0) {
+        container.innerHTML = '<span class="text-sm text-gray-400">暂无标签</span>';
+    } else {
+        container.innerHTML = tags.map(tag => `
+            <span class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                ${tag}
+                <button onclick="removeTagFromCurrentKeyword('${tag}')" class="hover:text-blue-900">×</button>
+            </span>
+        `).join('');
+    }
+}
+
+function addTagToCurrentKeyword() {
+    if (!currentKeyword) return;
+    const input = document.getElementById('newTagInput');
+    const tag = input.value.trim();
+    if (tag) {
+        addTagToKeyword(currentKeyword, tag);
+        input.value = '';
+    }
+}
+
+function removeTagFromCurrentKeyword(tag) {
+    if (!currentKeyword) return;
+    removeTagFromKeyword(currentKeyword, tag);
+}
+
+function openTagManager() {
+    const allTags = getAllTags();
+    const tagStats = {};
+    
+    allTags.forEach(tag => {
+        tagStats[tag] = Object.entries(keywordTags).filter(([kw, tags]) => tags.includes(tag)).length;
+    });
+    
+    let content = '<div class="space-y-2">';
+    if (allTags.length === 0) {
+        content += '<p class="text-gray-500">暂无标签</p>';
+    } else {
+        allTags.forEach(tag => {
+            content += `
+                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    <span class="font-medium">${tag}</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">${tagStats[tag]} 个关键词</span>
+                        <button onclick="deleteTag('${tag}')" class="text-red-500 hover:text-red-700 text-sm">删除</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    content += '</div>';
+    
+    // 使用 alert 简单展示，或者可以做成 modal
+    alert('标签管理\n\n' + allTags.map(tag => `${tag} (${tagStats[tag]}个)`).join('\n'));
+}
+
+function deleteTag(tag) {
+    Object.keys(keywordTags).forEach(keyword => {
+        keywordTags[keyword] = keywordTags[keyword].filter(t => t !== tag);
+        if (keywordTags[keyword].length === 0) {
+            delete keywordTags[keyword];
+        }
+    });
+    localStorage.setItem('keywordTags', JSON.stringify(keywordTags));
+    renderTagFilters();
+    if (currentKeyword) renderKeywordTags(currentKeyword);
+    renderKeywordList();
 }
 
 // ==================== 搜索历史 ====================
@@ -931,6 +1095,14 @@ function renderKeywordList() {
                 return isUpcomingSeason(season);
             }
             return season === seasonFilter || season === 'all';
+        });
+    }
+    
+    // 标签过滤
+    if (currentTagFilter !== 'all') {
+        keywords = keywords.filter(k => {
+            const tags = getKeywordTags(k);
+            return tags.includes(currentTagFilter);
         });
     }
     
@@ -1467,6 +1639,9 @@ function renderDetails() {
     
     // 渲染趋势预测
     renderPredictionChart();
+    
+    // 渲染关键词标签
+    renderKeywordTags(currentKeyword);
 }
 
 // ==================== 词云图 ====================
