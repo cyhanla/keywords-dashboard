@@ -347,6 +347,7 @@
 
     <script>
 let rawData = {};
+let extendedData = {};
 
 async function loadData() {
     try {
@@ -372,6 +373,7 @@ async function loadData() {
 
 // 处理原始数据，生成扩展数据
 function processData() {
+    extendedData = {};
     const seasonalPatterns = {
         "书包": "spring", "学生书包": "summer",
         "帽子": "summer", "鸭舌帽": "summer", "遮阳帽": "summer",
