@@ -161,12 +161,23 @@
             <div class="flex gap-3">
                 <div class="flex-1 relative">
                     <input type="text" id="searchInput" placeholder="输入关键词查询趋势（支持模糊搜索）..." 
-                           class="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                           class="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                           onkeydown="if(event.key==='Enter')searchKeyword()">
                     <svg class="w-5 h-5 text-gray-400 absolute left-3 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
+                    <button onclick="clearSearch()" id="clearSearchBtn" class="hidden absolute right-3 top-3 text-gray-400 hover:text-gray-600">✕</button>
                 </div>
                 <button onclick="searchKeyword()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">查询</button>
+            </div>
+            
+            <!-- 搜索历史 -->
+            <div id="searchHistory" class="mt-2 hidden">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs text-gray-500">历史搜索:</span>
+                    <div id="searchHistoryList" class="flex items-center gap-2 flex-wrap"></div>
+                    <button onclick="clearSearchHistory()" class="text-xs text-gray-400 hover:text-gray-600 underline">清除</button>
+                </div>
             </div>
         </div>
 
@@ -723,6 +734,63 @@ function filterByType(type) {
     // 渲染列表并滚动到顶部
     renderKeywordList();
     document.getElementById('keywordList').scrollTop = 0;
+}
+
+// ==================== 搜索历史 ====================
+
+function getSearchHistory() {
+    return JSON.parse(localStorage.getItem('searchHistory') || '[]');
+}
+
+function addSearchHistory(keyword) {
+    if (!keyword || keyword.trim() === '') return;
+    keyword = keyword.trim();
+    
+    let history = getSearchHistory();
+    // 移除重复项
+    history = history.filter(h => h !== keyword);
+    // 添加到开头
+    history.unshift(keyword);
+    // 最多保留10条
+    history = history.slice(0, 10);
+    
+    localStorage.setItem('searchHistory', JSON.stringify(history));
+    renderSearchHistory();
+}
+
+function renderSearchHistory() {
+    const history = getSearchHistory();
+    const container = document.getElementById('searchHistory');
+    const listEl = document.getElementById('searchHistoryList');
+    
+    if (history.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+    
+    container.classList.remove('hidden');
+    listEl.innerHTML = history.map(keyword => `
+        <button onclick="quickSearch('${keyword}')" 
+                class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
+            ${keyword}
+        </button>
+    `).join('');
+}
+
+function quickSearch(keyword) {
+    document.getElementById('searchInput').value = keyword;
+    searchKeyword();
+}
+
+function clearSearchHistory() {
+    localStorage.removeItem('searchHistory');
+    renderSearchHistory();
+}
+
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('clearSearchBtn').classList.add('hidden');
+    searchKeyword();
 }
 
 // ==================== 关键词列表渲染 ====================
