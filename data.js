@@ -3410,26 +3410,4 @@ ue":8439,"conversion":0.1926,"click_rate":1.0799}],"耳包冬季男":[{"date":"2
 te":"2025-01-01","value":8064,"conversion":0.2908,"click_rate":1.0589}],"帽子哈尔滨冬天":[{"date":"2025-01-01","value":8059,"conversion":0.1909,"click_rate":1.2399}],"手闷子":[{"date":"2025-01-01","value":7971,"conversion":0.1303,"click_rate":0.857}],"触屏手套冬季":[{"date":"2025-01-01","value":7966,"conversion":0.2449,"click_rate":1.0984}],"冬款百搭围巾":[{"date":"2025-01-01","value":7945,"conversion":0.1921,"click_rate":1.5329}],"哈尔滨防寒手套":[{"date":"2025-01-01","value":7933,"conversion":0.2828,"click_rate":1.0966}],
 "cfierce":[{"date":"2025-01-01","value":7925,"conversion":0.0237,"click_rate":3.4344}],"女孩冬季帽子":[{"date":"2025-01-01","value":7860,"conversion":0.1807,"click_rate":1.3927}],"冬款耳罩":[{"date":"2025-01-01","value":7742,"conversion":0.2649,"click_rate":1.3201}],"男秋冬脖套":[{"date":"2025-01-01","value":7708,"conversion":0.1921,"click_rate":0.2937}],"宁艺卓毛绒棒球帽":[{"date":"2025-01-01","value":7695,"conversion":0.0097,"click_rate":0.08}],"蝴蝶结礼帽":[{"date":"2025-01-01","value":7615,"conversion":0.0223,"click_ra
 te":0.282}],"榨精手套":[{"date":"2025-01-01","value":7535,"conversion":0.0308,"click_rate":0.4675}],"皮带男真皮正品高档品牌":[{"date":"2025-01-01","value":7518,"conversion":0.2117,"click_rate":0.9139}],"男士真皮腰带":[{"date":"2025-01-01","value":7512,"conversion":0.271,"click_rate":1.2459}],"帽子围巾一体女冬季2024新款":[{"date":"2025-01-01","value":7403,"conversion":0.1424,"click_rate":1.1732}],"护手手套":[{"date":"2025-01-01","value":7387,"conversion":0.2327,"click_rate":0.7499}],"罗意威官方旗舰店":[{"date":"2025-01-01","value":7381,"co
-nversion":0.0253,"click_rate":0.3744}]}
-
-
-        // 初始化
-        const keywords = Object.keys(keywordsData);
-        document.getElementById("totalKeywords").textContent = keywords.length;
-
-        // 计算增长率
-        function calcGrowth(kw) {
-            const d = keywordsData[kw];
-            const recent = d.slice(-15);
-            const previous = d.slice(-30, -15);
-            const recentAvg = recent.reduce((a,b) => a + b.value, 0) / 15;
-            const previousAvg = previous.reduce((a,b) => a + b.value, 0) / 15;
-            const growth = previousAvg ? ((recentAvg - previousAvg) / previousAvg * 100) : 0;
-            const avgConversion = recent.reduce((a,b) => a + b.conversion, 0) / 15;
-            return {
-                keyword: kw,
-                current: recent[14]?.value || 0,
-                recentAvg: Math.round(recentAvg),
-                growth: Math.round(growth * 100) / 100,
-                conversion: avgConversion
-            };
+nversion":0.0253,"click_rate":0.3744}]};
