@@ -171,9 +171,9 @@
             </div>
         </div>
 
-        <!-- Search Bar -->
+        <!-- Search Bar + Category Filter -->
         <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
-            <div class="flex gap-3">
+            <div class="flex flex-col md:flex-row gap-4">
                 <div class="flex-1 relative">
                     <input type="text" id="searchInput" placeholder="输入关键词查询趋势（支持模糊搜索）..." 
                            class="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -183,7 +183,12 @@
                     </svg>
                     <button onclick="clearSearch()" id="clearSearchBtn" class="hidden absolute right-3 top-3 text-gray-400 hover:text-gray-600">✕</button>
                 </div>
-                <button onclick="searchKeyword()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">查询</button>
+                <div class="flex gap-2">
+                    <select id="categoryFilter" onchange="filterByCategory(this.value)" class="px-4 py-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-w-[140px]">
+                        <option value="all">📁 全部分类</option>
+                    </select>
+                    <button onclick="searchKeyword()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">查询</button>
+                </div>
             </div>
             
             <!-- 搜索历史 -->
@@ -196,9 +201,51 @@
             </div>
         </div>
 
-        <!-- 变化排行榜 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div class="bg-white rounded-xl shadow-sm p-4">
+        <!-- 主内容区：左侧关键词列表 + 右侧趋势图 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <!-- Left: Keyword List -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+                        <h2 class="font-semibold text-gray-900">📋 关键词列表</h2>
+                        <span id="filteredCount" class="text-xs text-gray-500"></span>
+                    </div>
+                    <div id="keywordList" class="max-h-[600px] overflow-y-auto">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+                
+                <!-- 标签筛选 -->
+                <div class="bg-white rounded-xl shadow-sm p-3 mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-gray-700">🏷️ 标签筛选</span>
+                        <button onclick="openTagManager()" class="text-xs text-blue-600 hover:text-blue-800">管理</button>
+                    </div>
+                    <div id="tagFilterList" class="flex flex-wrap gap-2">
+                        <button onclick="filterByTag('all')" class="tag-filter px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700" data-tag="all">全部</button>
+                        <!-- Dynamic tags -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Chart & Trend -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Chart -->
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-semibold text-gray-900" id="chartTitle">点击左侧关键词查看趋势</h2>
+                        <div class="flex gap-2" id="timeRangeButtons">
+                            <button onclick="setTimeRange(7)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">7天</button>
+                            <button onclick="setTimeRange(30)" class="time-btn px-3 py-1 text-sm rounded bg-blue-100 text-blue-700">30天</button>
+                            <button onclick="setTimeRange(90)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">90天</button>
+                            <button onclick="setTimeRange(365)" class="time-btn px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">1年</button>
+                        </div>
+                    </div>
+                    <div id="timeRangeLabel" class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full mb-2 inline-block"></div>
+                    <div class="h-80">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-semibold text-gray-900">📈 涨幅榜 Top10</h3>
                     <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">今日上升最快</span>
@@ -240,9 +287,14 @@
                     <h2 class="font-bold text-gray-900">📅 季节性周期对比</h2>
                     <span class="text-xs text-gray-500">今年 vs 去年同期</span>
                 </div>
-                <select id="seasonalCompareKeyword" onchange="renderSeasonalComparison()" class="px-3 py-1 border rounded-lg text-sm">
-                    <option value="">选择关键词</option>
-                </select>
+                <div class="flex gap-2">
+                    <select id="seasonalCompareCategory" onchange="initSeasonalComparison()" class="px-3 py-1 border rounded-lg text-sm">
+                        <option value="">选择品类</option>
+                    </select>
+                    <select id="seasonalCompareKeyword" onchange="renderSeasonalComparison()" class="px-3 py-1 border rounded-lg text-sm">
+                        <option value="">选择关键词</option>
+                    </select>
+                </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div class="p-3 bg-blue-50 rounded-lg text-center">
@@ -747,6 +799,47 @@ let comparingKeywords = [];
 let favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
 let keywordTags = JSON.parse(localStorage.getItem('keywordTags') || '{}');
 let currentTagFilter = 'all';
+let currentCategoryFilter = 'all'; // 当前品类筛选
+
+// ==================== 品类分类体系 ====================
+
+const categoryMapping = {
+    // 双肩包类目
+    '双肩包': ['双肩包', '书包', '背包', '旅行包', '电脑包', '登山包', '运动包', '学生书包', '商务双肩包', '休闲双肩包', '女士双肩包', '男士双肩包', '大容量双肩包', '轻便双肩包', '防水双肩包'],
+    // 帽子类目  
+    '帽子': ['帽子', '鸭舌帽', '遮阳帽', '棒球帽', '冷帽', '渔夫帽', '贝雷帽', '草帽', '太阳帽', '保暖帽', '毛线帽', '针织帽', '帽子女', '帽子男', '儿童帽子'],
+    // 围巾类目
+    '围巾': ['围巾', '丝巾', '披肩', '围脖', '保暖围巾', '羊毛围巾', '羊绒围巾', '丝巾女', '真丝丝巾', '长围巾'],
+    // 手套类目
+    '手套': ['手套', '保暖手套', '皮手套', '针织手套', '触屏手套', '骑行手套', '滑雪手套', '手套男', '手套女'],
+    // 腰带类目
+    '腰带': ['腰带', '皮带', '腰带男', '腰带女', '真皮腰带', '帆布腰带', '自动扣皮带', '针扣皮带'],
+    // 挂件饰品类
+    '挂件饰品': ['挂件', '钥匙扣', '包包挂件', '手机挂件', '饰品', '配饰', 'hellokitty', '卡通挂件'],
+    // 鞋垫类目
+    '鞋垫': ['鞋垫', '增高鞋垫', '运动鞋垫', '透气鞋垫', '防臭鞋垫', '减震鞋垫'],
+    // 防晒类目
+    '防晒用品': ['防晒面罩', '防晒口罩', '防晒袖套', '防晒衣', '遮阳伞']
+};
+
+function getKeywordCategory(keyword) {
+    for (const [category, keywords] of Object.entries(categoryMapping)) {
+        if (keywords.some(k => keyword.includes(k) || k.includes(keyword))) {
+            return category;
+        }
+    }
+    return '其他';
+}
+
+function getAllCategories() {
+    return Object.keys(categoryMapping);
+}
+
+function filterKeywordsByCategory(keywords, category) {
+    if (category === 'all') return keywords;
+    return keywords.filter(kw => getKeywordCategory(kw) === category);
+}
+
 let chart = null;
 let predictionChart = null;
 let competitionChart = null;
@@ -823,20 +916,7 @@ function init() {
     initDarkMode();
     renderSearchHistory();
     renderTagFilters();
-    initChart();
-    initPredictionChart();
-    initCompetitionChart();
-    renderKeywordList();
-    renderSeasonalAlerts();
-    updateStats();
-    updateFavCount();
-    renderRankings();
-}
-
-function init() {
-    initDarkMode();
-    renderSearchHistory();
-    renderTagFilters();
+    initCategoryFilter();
     initChart();
     initPredictionChart();
     initCompetitionChart();
@@ -1018,16 +1098,33 @@ function dismissAllAlerts() {
 let seasonalCompareChart = null;
 
 function initSeasonalComparison() {
-    const select = document.getElementById('seasonalCompareKeyword');
-    const keywords = Object.keys(extendedData).sort();
+    const categorySelect = document.getElementById('seasonalCompareCategory');
+    const keywordSelect = document.getElementById('seasonalCompareKeyword');
     
-    select.innerHTML = '<option value="">选择关键词</option>' + 
-        keywords.map(kw => `<option value="${kw}">${kw}</option>`).join('');
+    // 初始化品类下拉框
+    if (categorySelect.options.length <= 1) {
+        const categories = getAllCategories();
+        categorySelect.innerHTML = '<option value="">选择品类</option>' + 
+            categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+    }
     
-    // 默认选择第一个有季节性模式的词
+    const selectedCategory = categorySelect.value;
+    let keywords = Object.keys(extendedData).sort();
+    
+    // 如果选择了品类，只显示该品类下的关键词
+    if (selectedCategory) {
+        keywords = filterKeywordsByCategory(keywords, selectedCategory);
+    }
+    
+    // 筛选有季节性模式的关键词
     const seasonalKeywords = keywords.filter(kw => extendedData[kw].season !== 'all');
+    
+    keywordSelect.innerHTML = '<option value="">选择关键词</option>' + 
+        seasonalKeywords.map(kw => `<option value="${kw}">${kw}</option>`).join('');
+    
+    // 默认选择第一个
     if (seasonalKeywords.length > 0) {
-        select.value = seasonalKeywords[0];
+        keywordSelect.value = seasonalKeywords[0];
         renderSeasonalComparison();
     }
 }
@@ -1497,6 +1594,27 @@ function deleteTag(tag) {
     renderKeywordList();
 }
 
+// ==================== 品类筛选 ====================
+
+function initCategoryFilter() {
+    const select = document.getElementById('categoryFilter');
+    const categories = getAllCategories();
+    
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        select.appendChild(option);
+    });
+}
+
+function filterByCategory(category) {
+    currentCategoryFilter = category;
+    renderKeywordList();
+    renderRankings(); // 涨幅榜也按品类筛选
+    renderWordCloud('volume'); // 词云图也按品类筛选
+}
+
 // ==================== 搜索历史 ====================
 
 function getSearchHistory() {
@@ -1557,7 +1675,12 @@ function clearSearch() {
 // ==================== 变化排行榜 ====================
 
 function renderRankings() {
-    const keywords = Object.keys(extendedData);
+    let keywords = Object.keys(extendedData);
+    
+    // 品类过滤
+    if (currentCategoryFilter !== 'all') {
+        keywords = filterKeywordsByCategory(keywords, currentCategoryFilter);
+    }
     
     // 涨幅榜
     const rising = keywords
@@ -1646,6 +1769,11 @@ function renderKeywordList() {
             const tags = getKeywordTags(k);
             return tags.includes(currentTagFilter);
         });
+    }
+    
+    // 品类过滤
+    if (currentCategoryFilter !== 'all') {
+        keywords = filterKeywordsByCategory(keywords, currentCategoryFilter);
     }
     
     // 排序
@@ -2348,7 +2476,12 @@ function renderDetails() {
 
 function renderWordCloud(sortBy = 'volume') {
     const container = document.getElementById('wordCloud');
-    const keywords = Object.keys(extendedData);
+    let keywords = Object.keys(extendedData);
+    
+    // 品类过滤
+    if (currentCategoryFilter !== 'all') {
+        keywords = filterKeywordsByCategory(keywords, currentCategoryFilter);
+    }
     
     // 排序并取前30个
     const sorted = keywords.sort((a, b) => {
@@ -2356,6 +2489,11 @@ function renderWordCloud(sortBy = 'volume') {
         if (sortBy === 'growth') return extendedData[b].growth - extendedData[a].growth;
         return 0;
     }).slice(0, 30);
+    
+    if (sorted.length === 0) {
+        container.innerHTML = '<span class="text-gray-400 text-sm">该分类下暂无关键词</span>';
+        return;
+    }
     
     // 计算大小范围
     const maxValue = Math.max(...sorted.map(k => extendedData[k].current));
