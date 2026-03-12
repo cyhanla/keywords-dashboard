@@ -804,46 +804,71 @@ let currentCategoryFilter = 'all'; // 当前品类筛选
 // ==================== 品类分类体系（基于明然居实际数据结构）====================
 
 const categoryMapping = {
+    // 箱包皮具/热销女包/男包 > 双肩背包
+    '双肩背包': [
+        '双肩包', '背包', '书包', '旅行包', '电脑包', '登山包', '运动包',
+        '双肩背包', '学生书包', '商务背包', '休闲背包', '女士双肩包', '男士双肩包',
+        '大容量双肩包', '轻便双肩包', '防水双肩包', '电脑背包', '旅行背包'
+    ],
+    // 箱包皮具 > 男士包袋
+    '男士包袋': [
+        '男包', '男士包', '男士背包', '男士斜挎包', '男士单肩包', '男士手提包',
+        '男士钱包', '男士公文包', '男士胸包', '男士腰包'
+    ],
+    // 箱包皮具 > 女士包袋
+    '女士包袋': [
+        '女包', '女士包', '女士背包', '女士斜挎包', '女士单肩包', '女士手提包',
+        '女士钱包', '女士手拿包', '女士帆布包', '女士托特包'
+    ],
     // 服饰配件/皮带/帽子/围巾 > 手套
     '手套': [
         '手套', '骑行手套', '皮手套', '防晒手套', '保暖手套', '半指手套', 
         '开车手套', '登山手套', '美甲手套', '骑车手套', '蕾丝手套',
-        '手套女', '手套男', '手套冬季', '手套保暖', '手套骑行', '手套防晒'
+        '手套女', '手套男', '手套冬季', '手套保暖', '手套骑行', '手套防晒',
+        '手套触屏', '手套加绒', '防风手套', '防寒手套', '滑雪手套'
     ],
     // 服饰配件/皮带/帽子/围巾 > 帽子
     '帽子': [
         '帽子', '鸭舌帽', '冷帽', '棒球帽', '贝雷帽', '渔夫帽', '遮阳帽', 
         '草帽', '针织帽', '毛线帽', '鸭舌帽女', '鸭舌帽男', '帽子男', '帽子女',
-        '帽子冬季', '拉夫劳伦帽子', 'ck帽子', 'emis帽子', '红色帽子', '防晒帽'
+        '帽子冬季', '拉夫劳伦帽子', 'ck帽子', 'emis帽子', '红色帽子', '防晒帽',
+        '雷锋帽', '地主帽', '前进帽', '报童帽', '海军帽', '八角帽'
     ],
     // 服饰配件/皮带/帽子/围巾 > 围巾
     '围巾': [
         '围巾', '丝巾', '披肩', '围脖', '羊绒围巾', '羊毛围巾', 
-        '围巾女', '围巾男', '围巾冬季', 'lv围巾', '丝巾女', '真丝丝巾'
+        '围巾女', '围巾男', '围巾冬季', 'lv围巾', '丝巾女', '真丝丝巾',
+        '羊毛披肩', '羊绒披肩', '针织围巾', '毛线围巾', '薄围巾', '大方巾'
     ],
     // 服饰配件/皮带/帽子/围巾 > 皮带/腰带
     '皮带/腰带': [
         '皮带', '腰带', '皮带男', '皮带女', '男士皮带', '女士腰带',
-        '真皮腰带', '自动扣皮带', '帆布腰带', '针扣皮带'
+        '真皮腰带', '自动扣皮带', '帆布腰带', '针扣皮带', '皮带扣',
+        '裤带', '真皮皮带', '纯牛皮皮带'
     ],
     // 服饰配件/皮带/帽子/围巾 > 挂件饰品
     '挂件饰品': [
         '挂件', '钥匙扣', '包包挂件', '书包挂件', '背包挂件', 
-        '小马挂件', '挂件玩偶', '挂件公仔', '包包配饰', 'hellokitty'
+        '小马挂件', '挂件玩偶', '挂件公仔', '包包配饰', 'hellokitty',
+        '钥匙链', '钥匙挂件', '手机挂件', '车钥匙扣'
     ],
-    // 鞋垫
+    // 服饰配件 > 鞋垫
     '鞋垫': [
         '鞋垫', '增高鞋垫', '足弓支撑鞋垫', '足弓鞋垫', '内增高鞋垫',
-        '防臭鞋垫', '运动鞋垫', '鞋垫男', '鞋垫女', '鞋垫运动'
+        '防臭鞋垫', '运动鞋垫', '鞋垫男', '鞋垫女', '鞋垫运动',
+        '减震鞋垫', '透气鞋垫', '吸汗鞋垫', '软底鞋垫'
     ],
-    // 防晒用品（面罩/口罩/袖套）
+    // 服饰配件 > 防晒用品
     '防晒用品': [
         '防晒面罩', '防晒口罩', '面罩', '防晒袖套', '袖套',
-        '口罩女防晒', '口罩防晒', '蕉下防晒帽', '蕉下'
+        '口罩女防晒', '口罩防晒', '蕉下防晒帽', '蕉下', '防晒头套',
+        '防晒面纱', '防晒围脖', '冰袖', '防晒冰袖'
     ],
     // 其他配饰
     '其他配饰': [
-        '领带', '耳罩', '耳包', '鞋带', 'burberry'
+        '领带', '领结', '领花', '袖扣', '胸针', '胸花',
+        '耳罩', '耳包', '耳套', '耳暖',
+        '鞋带', '蝴蝶结', 'burberry'
     ]
 };
 
@@ -1213,37 +1238,59 @@ function renderSeasonalComparison() {
     document.getElementById('yoyGrowth').className = 
         `text-xl font-bold ${yoyGrowth > 0 ? 'text-green-600' : 'text-red-600'}`;
     
-    // 计算距离旺季
+    // 计算距离旺季和当前阶段（基于实际月份和趋势）
     const season = d.season;
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
-    let peakMonth, daysToPeak;
+    let peakMonth, daysToPeak, phaseText;
     
+    // 根据关键词类型和当前月份智能判断阶段
     switch(season) {
-        case 'spring': peakMonth = 3; break;
-        case 'summer': peakMonth = 6; break;
-        case 'autumn': peakMonth = 9; break;
-        case 'winter': peakMonth = 12; break;
-        default: peakMonth = currentMonth;
+        case 'winter': // 冬季词：手套、围巾、冷帽
+            peakMonth = 12;
+            if (currentMonth >= 11 || currentMonth <= 1) {
+                phaseText = currentMonth === 12 ? '🔥 冬季高峰期' : '❄️ 冬季旺季';
+                daysToPeak = currentMonth <= 1 ? (1 - currentMonth) * 30 : 0;
+            } else if (currentMonth >= 2 && currentMonth <= 4) {
+                phaseText = '📉 冬季收尾期（下降中）';
+                daysToPeak = ((12 - currentMonth) + 11) * 30;
+            } else {
+                phaseText = '💤 夏季淡季';
+                daysToPeak = ((12 - currentMonth) + 11) * 30;
+            }
+            break;
+            
+        case 'summer': // 夏季词：防晒、遮阳帽
+            peakMonth = 6;
+            if (currentMonth >= 5 && currentMonth <= 7) {
+                phaseText = currentMonth === 6 ? '🔥 夏季高峰期' : '☀️ 夏季旺季';
+                daysToPeak = 0;
+            } else if (currentMonth >= 3 && currentMonth <= 4) {
+                phaseText = '📈 夏季预热期（上升中）';
+                daysToPeak = (6 - currentMonth) * 30;
+            } else if (currentMonth >= 8 && currentMonth <= 10) {
+                phaseText = '📉 夏季收尾期（下降中）';
+                daysToPeak = ((12 - currentMonth) + 5) * 30;
+            } else {
+                phaseText = '💤 冬季淡季';
+                daysToPeak = ((12 - currentMonth) + 5) * 30;
+            }
+            break;
+            
+        default:
+            phaseText = '📊 全年稳定';
+            daysToPeak = 0;
     }
     
-    if (currentMonth <= peakMonth) {
-        daysToPeak = (peakMonth - currentMonth) * 30;
-    } else {
-        daysToPeak = ((12 - currentMonth) + peakMonth) * 30;
+    // 根据实际趋势进一步细化
+    if (d.growth > 15 && !phaseText.includes('高峰')) {
+        phaseText += ' 📈 快速上升';
+    } else if (d.growth < -15) {
+        phaseText = phaseText.replace('期', '下降期');
     }
     
-    document.getElementById('daysToPeak').textContent = `${daysToPeak} 天`;
-    
-    // 当前阶段
-    const phaseMap = {
-        'spring': '春季预热期',
-        'summer': '夏季旺季',
-        'autumn': '秋季准备期',
-        'winter': '冬季高峰期',
-        'all': '全年稳定期'
-    };
-    document.getElementById('seasonPhase').textContent = phaseMap[season] || '平稳期';
+    document.getElementById('daysToPeak').textContent = daysToPeak > 0 ? `${daysToPeak} 天` : '当前就是';
+    document.getElementById('seasonPhase').textContent = phaseText;
     
     // 渲染图表
     const labels = thisYearData.map(item => {
