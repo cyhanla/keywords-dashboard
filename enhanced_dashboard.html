@@ -27,9 +27,22 @@
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
         .modal.active { display: flex; }
         .modal-content { @apply bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden; }
+        
+        /* 深色模式 */
+        body.dark { background-color: #0f172a; color: #e2e8f0; }
+        body.dark .bg-white { background-color: #1e293b; }
+        body.dark .bg-gray-50 { background-color: #0f172a; }
+        body.dark .bg-gray-100 { background-color: #334155; }
+        body.dark .text-gray-900 { color: #f1f5f9; }
+        body.dark .text-gray-700 { color: #cbd5e1; }
+        body.dark .text-gray-500 { color: #94a3b8; }
+        body.dark .border { border-color: #334155; }
+        body.dark .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.3); }
+        body.dark .kw-item:hover { background: #334155; }
+        body.dark .kw-item.selected { background: #1e3a5f; }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen transition-colors duration-300">
     <!-- Header -->
     <header class="bg-white shadow-sm border-b sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 py-4">
@@ -44,6 +57,13 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
+                    <button onclick="toggleDarkMode()" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="切换深色模式">
+                        <span id="darkModeIcon">🌙</span>
+                    </button>
+                    <button onclick="exportData()" class="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">
+                        <span>📥</span>
+                        <span class="font-medium">导出数据</span>
+                    </button>
                     <button onclick="openAlertSettings()" class="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors">
                         <span>🔔</span>
                         <span class="font-medium">预警设置</span>
@@ -507,9 +527,73 @@ let timeRange = 30;
 let compareMode = false;
 let activeFilterType = 'all'; // 当前激活的统计卡片筛选类型
 
+// ==================== 深色模式 ====================
+
+function initDarkMode() {
+    const isDark = localStorage.getItem('darkMode') === 'true';
+    if (isDark) {
+        document.body.classList.add('dark');
+        document.getElementById('darkModeIcon').textContent = '☀️';
+    }
+}
+
+function toggleDarkMode() {
+    const isDark = document.body.classList.toggle('dark');
+    localStorage.setItem('darkMode', isDark);
+    document.getElementById('darkModeIcon').textContent = isDark ? '☀️' : '🌙';
+}
+
+// ==================== 数据导出 ====================
+
+function exportData() {
+    const format = confirm('导出为 CSV 格式？\n\n点击"确定"导出 CSV\n点击"取消"导出 JSON') ? 'csv' : 'json';
+    
+    if (format === 'csv') {
+        exportCSV();
+    } else {
+        exportJSON();
+    }
+}
+
+function exportCSV() {
+    let csv = '关键词,日期,搜索量,转化率,点击率\n';
+    
+    Object.keys(extendedData).forEach(keyword => {
+        const dailyData = extendedData[keyword].dailyData || [];
+        dailyData.forEach(d => {
+            csv += `${keyword},${d.date},${d.value},${d.conversion},${d.click_rate}\n`;
+        });
+    });
+    
+    downloadFile(csv, 'keywords_data.csv', 'text/csv;charset=utf-8;');
+}
+
+function exportJSON() {
+    const data = {
+        exportTime: new Date().toISOString(),
+        keywordCount: Object.keys(extendedData).length,
+        data: extendedData
+    };
+    
+    downloadFile(JSON.stringify(data, null, 2), 'keywords_data.json', 'application/json');
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob(['\uFEFF' + content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 // ==================== 初始化 ====================
 
 function init() {
+    initDarkMode();
     renderKeywordList();
     renderSeasonalAlerts();
     updateStats();
@@ -790,7 +874,15 @@ function initChart() {
                     position: 'top'
                 },
                 tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: { size: 14, weight: 'bold' },
+                    bodyFont: { size: 13 },
                     callbacks: {
+                        title: function(context) {
+                            // 默认返回标签，会在 renderChart 中被覆盖
+                            return context[0].label;
+                        },
                         label: function(context) {
                             return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
                         }
@@ -805,6 +897,13 @@ function initChart() {
                             return value >= 10000 ? (value/10000).toFixed(1) + '万' : value;
                         }
                     }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 0,
+                        autoSkip: false
+                    }
                 }
             },
             onClick: (e, elements) => {
@@ -816,6 +915,60 @@ function initChart() {
             }
         }
     });
+}
+
+// 辅助函数：格式化日期标签
+function formatDateLabel(dateStr, timeRange, prevYear) {
+    const date = new Date(dateStr);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    
+    const mm = month.toString().padStart(2, '0');
+    const dd = day.toString().padStart(2, '0');
+    
+    if (timeRange <= 7) {
+        // 7天：显示 "3月15日" 格式
+        return `${month}月${day}日`;
+    } else if (timeRange <= 30) {
+        // 30天：显示 "03-15"，跨年显示 "2025-03-15"
+        if (prevYear && prevYear !== year) {
+            return `${year}-${mm}-${dd}`;
+        }
+        return `${mm}-${dd}`;
+    } else if (timeRange <= 90) {
+        // 90天：显示 "2025-03"
+        return `${year}-${mm}`;
+    } else {
+        // 1年：显示 "2025-03"
+        return `${year}-${mm}`;
+    }
+}
+
+// 辅助函数：获取时间范围描述
+function getTimeRangeDescription(slicedData) {
+    if (slicedData.length === 0) return '';
+    const startDate = new Date(slicedData[0].date);
+    const endDate = new Date(slicedData[slicedData.length - 1].date);
+    
+    const startYear = startDate.getFullYear();
+    const endYear = endDate.getFullYear();
+    const startMonth = startDate.getMonth() + 1;
+    const endMonth = endDate.getMonth() + 1;
+    const startDay = startDate.getDate();
+    const endDay = endDate.getDate();
+    
+    if (startYear === endYear) {
+        // 同一年
+        if (startMonth === endMonth && startDay === 1 && endDay >= 28) {
+            // 整月
+            return `${startYear}年${startMonth}月`;
+        }
+        return `${startYear}年${startMonth}月${startDay}日 - ${endMonth}月${endDay}日`;
+    } else {
+        // 跨年
+        return `${startYear}年${startMonth}月 - ${endYear}年${endMonth}月`;
+    }
 }
 
 function renderChart() {
@@ -845,8 +998,8 @@ function renderChart() {
             backgroundColor: colors[idx % colors.length] + '20',
             fill: comparingKeywords.length === 0,
             tension: 0.3,
-            pointRadius: 2,
-            pointHoverRadius: 5
+            pointRadius: timeRange <= 30 ? 3 : 2,
+            pointHoverRadius: 6
         };
     });
     
@@ -854,23 +1007,81 @@ function renderChart() {
     const dailyData = extendedData[currentKeyword].dailyData || extendedData[currentKeyword].data;
     const slicedData = dailyData.slice(Math.max(0, dailyData.length - timeRange));
     
+    // 获取时间范围描述
+    const timeRangeDesc = getTimeRangeDescription(slicedData);
+    
     // 根据时间范围决定标签格式
-    const labels = slicedData.map((d, i) => {
-        if (timeRange <= 30) {
-            // 30天内显示 MM-DD
-            return d.date.slice(5);
+    const labels = [];
+    let prevYear = null;
+    
+    slicedData.forEach((d, i) => {
+        const date = new Date(d.date);
+        const year = date.getFullYear();
+        
+        let label = '';
+        
+        if (timeRange <= 7) {
+            // 7天：显示所有标签
+            label = formatDateLabel(d.date, timeRange, prevYear);
+        } else if (timeRange <= 30) {
+            // 30天：每隔3天显示一个标签，跨年时显示年份
+            if (i % 3 === 0 || prevYear !== year) {
+                label = formatDateLabel(d.date, timeRange, prevYear);
+            }
         } else if (timeRange <= 90) {
-            // 90天内每隔5天显示一个标签
-            return i % 5 === 0 ? d.date.slice(5) : '';
+            // 90天：每7天显示一个标签
+            if (i % 7 === 0) {
+                label = formatDateLabel(d.date, timeRange, prevYear);
+            }
         } else {
-            // 1年内每隔15天显示一个标签
-            return i % 15 === 0 ? d.date.slice(5) : '';
+            // 1年：每15天显示一个标签
+            if (i % 15 === 0) {
+                label = formatDateLabel(d.date, timeRange, prevYear);
+            }
         }
+        
+        labels.push(label);
+        prevYear = year;
     });
+    
+    // 更新图表配置，添加时间范围标签和自定义 tooltip
+    chart.options.plugins.customTimeRange = {
+        text: timeRangeDesc
+    };
+    
+    // 更新 tooltip 回调，显示完整日期
+    chart.options.plugins.tooltip.callbacks.title = function(context) {
+        const index = context[0].dataIndex;
+        // 找到第一个数据集的原始数据
+        const firstKw = keywordsToShow[0];
+        const data = extendedData[firstKw].dailyData || extendedData[firstKw].data;
+        const sliceStart = Math.max(0, data.length - timeRange);
+        const sliced = data.slice(sliceStart);
+        const dateStr = sliced[index].date;
+        const date = new Date(dateStr);
+        return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    };
     
     chart.data.labels = labels;
     chart.data.datasets = datasets;
     chart.update();
+    
+    // 更新时间范围标签
+    updateTimeRangeLabel(timeRangeDesc);
+}
+
+// 更新时间范围标签显示
+function updateTimeRangeLabel(text) {
+    let labelEl = document.getElementById('timeRangeLabel');
+    if (!labelEl) {
+        labelEl = document.createElement('div');
+        labelEl.id = 'timeRangeLabel';
+        labelEl.className = 'text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full';
+        // 插入到图表标题后面
+        const chartTitle = document.getElementById('chartTitle');
+        chartTitle.parentNode.insertBefore(labelEl, chartTitle.nextSibling);
+    }
+    labelEl.textContent = text;
 }
 
 function setTimeRange(days) {
