@@ -266,7 +266,7 @@
             </div>
         </div>
 
-        <!-- 智能预警中心 v20260312 -->
+        <!-- 智能预警中心 v20260314 -->
         <div id="smartAlertCenter" class="bg-white rounded-xl shadow-sm p-4 mb-6 hidden">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
@@ -274,7 +274,12 @@
                     <h2 class="font-bold text-gray-900">智能预警中心</h2>
                     <span id="activeAlertCount" class="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">0</span>
                 </div>
-                <button onclick="dismissAllAlerts()" class="text-sm text-gray-500 hover:text-gray-700">全部忽略</button>
+                <div class="flex items-center gap-3">
+                    <select id="alertCategoryFilter" onchange="checkSmartAlerts()" class="px-3 py-1 border rounded-lg text-sm">
+                        <option value="">全部品类</option>
+                    </select>
+                    <button onclick="dismissAllAlerts()" class="text-sm text-gray-500 hover:text-gray-700">全部忽略</button>
+                </div>
             </div>
             <div id="smartAlertList" class="space-y-3">
                 <!-- Dynamic alerts -->
@@ -1059,6 +1064,14 @@ function init() {
 let dismissedAlerts = JSON.parse(localStorage.getItem('dismissedAlerts') || '[]');
 
 function initSmartAlerts() {
+    // 初始化品类筛选下拉框
+    const categorySelect = document.getElementById('alertCategoryFilter');
+    if (categorySelect && categorySelect.options.length <= 1) {
+        const categories = getAllCategories();
+        categorySelect.innerHTML = '<option value="">全部品类</option>' + 
+            categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+    }
+    
     checkSmartAlerts();
     // 每30分钟检查一次
     setInterval(checkSmartAlerts, 30 * 60 * 1000);
@@ -1067,12 +1080,29 @@ function initSmartAlerts() {
 function checkSmartAlerts() {
     const alerts = [];
     const now = new Date().toISOString();
+    const selectedCategory = document.getElementById('alertCategoryFilter')?.value || '';
     
-    Object.keys(extendedData).forEach(keyword => {
+    // 获取所有关键词并按品类分组
+    let keywords = Object.keys(extendedData);
+    
+    // 如果选择了品类，只筛选该品类
+    if (selectedCategory) {
+        keywords = filterKeywordsByCategory(keywords, selectedCategory);
+    }
+    
+    // 按品类分组存储预警
+    const alertsByCategory = {};
+    
+    keywords.forEach(keyword => {
         const d = extendedData[keyword];
         const dailyData = d.dailyData || d.data;
+        const category = getKeywordCategory(keyword);
         
-        // 预警1: 连续3天涨幅超过15%
+        if (!alertsByCategory[category]) {
+            alertsByCategory[category] = [];
+        }
+        
+        // 预警1: 连续3天涨幅超过15% (爆发期)
         if (dailyData.length >= 3) {
             const last3 = dailyData.slice(-3);
             const growth1 = (last3[1].value - last3[0].value) / last3[0].value;
@@ -1081,7 +1111,7 @@ function checkSmartAlerts() {
             if (growth1 > 0.15 && growth2 > 0.15) {
                 const alertId = `explosive_${keyword}_${last3[2].date}`;
                 if (!dismissedAlerts.includes(alertId)) {
-                    alerts.push({
+                    alertsByCategory[category].push({
                         id: alertId,
                         type: 'explosive',
                         icon: '🚀',
@@ -1089,7 +1119,9 @@ function checkSmartAlerts() {
                         message: `连续2天涨幅超过15%，当前涨幅 ${((growth1 + growth2) * 50).toFixed(1)}%`,
                         keyword: keyword,
                         time: now,
-                        action: '立即查看'
+                        action: '立即查看',
+                        growth: growth1 + growth2,
+                        category: category
                     });
                 }
             }
@@ -1099,7 +1131,7 @@ function checkSmartAlerts() {
         if (d.competition > 50 && d.competitionChange > 20) {
             const alertId = `competition_${keyword}_${now}`;
             if (!dismissedAlerts.includes(alertId)) {
-                alerts.push({
+                alertsByCategory[category].push({
                     id: alertId,
                     type: 'competition',
                     icon: '⚠️',
@@ -1107,7 +1139,9 @@ function checkSmartAlerts() {
                     message: `竞争度突然上升 ${d.competitionChange} 点，可能有新竞争者入场`,
                     keyword: keyword,
                     time: now,
-                    action: '分析详情'
+                    action: '分析详情',
+                    growth: d.growth || 0,
+                    category: category
                 });
             }
         }
@@ -1120,7 +1154,7 @@ function checkSmartAlerts() {
             if (drop > 0.3) {
                 const alertId = `drop_${keyword}_${last2[1].date}`;
                 if (!dismissedAlerts.includes(alertId)) {
-                    alerts.push({
+                    alertsByCategory[category].push({
                         id: alertId,
                         type: 'drop',
                         icon: '📉',
@@ -1128,7 +1162,9 @@ function checkSmartAlerts() {
                         message: `单日下跌 ${(drop * 100).toFixed(1)}%，建议关注原因`,
                         keyword: keyword,
                         time: now,
-                        action: '查看原因'
+                        action: '查看原因',
+                        growth: -drop,
+                        category: category
                     });
                 }
             }
@@ -1137,12 +1173,16 @@ function checkSmartAlerts() {
     
     // 预警4: 收藏词变化提醒
     favorites.forEach(keyword => {
-        if (extendedData[keyword]) {
+        if (extendedData[keyword] && (!selectedCategory || filterKeywordsByCategory([keyword], selectedCategory).length > 0)) {
             const d = extendedData[keyword];
             if (Math.abs(d.growth) > 20) {
+                const category = getKeywordCategory(keyword);
                 const alertId = `fav_${keyword}_${now}`;
                 if (!dismissedAlerts.includes(alertId)) {
-                    alerts.push({
+                    if (!alertsByCategory[category]) {
+                        alertsByCategory[category] = [];
+                    }
+                    alertsByCategory[category].push({
                         id: alertId,
                         type: 'favorite',
                         icon: '⭐',
@@ -1150,15 +1190,29 @@ function checkSmartAlerts() {
                         message: `涨跌幅 ${d.growth > 0 ? '+' : ''}${d.growth.toFixed(1)}%，${d.growth > 0 ? '建议考虑加仓' : '建议关注风险'}`,
                         keyword: keyword,
                         time: now,
-                        action: '查看详情'
+                        action: '查看详情',
+                        growth: d.growth,
+                        category: category
                     });
                 }
             }
         }
     });
     
+    // 对每个品类的预警按涨幅排序，只取前5个
+    Object.keys(alertsByCategory).forEach(category => {
+        alertsByCategory[category].sort((a, b) => b.growth - a.growth);
+        const top5 = alertsByCategory[category].slice(0, 5);
+        alerts.push(...top5);
+    });
+    
     // 渲染预警
     renderSmartAlerts(alerts);
+}
+
+// 判断关键词是否属于某个品类（使用已有的getKeywordCategory）
+function isKeywordInCategory(keyword, category) {
+    return getKeywordCategory(keyword) === category;
 }
 
 function renderSmartAlerts(alerts) {
@@ -1179,7 +1233,10 @@ function renderSmartAlerts(alerts) {
             <span class="text-xl">${alert.icon}</span>
             <div class="flex-1">
                 <div class="flex items-center justify-between">
-                    <span class="font-bold text-gray-900">${alert.title}</span>
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-gray-900">${alert.title}</span>
+                        ${alert.category ? `<span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded">${alert.category}</span>` : ''}
+                    </div>
                     <button onclick="dismissAlert('${alert.id}')" class="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
                 <p class="text-sm text-gray-600 mt-1">${alert.message}</p>
