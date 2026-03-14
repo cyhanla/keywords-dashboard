@@ -2577,7 +2577,25 @@ function getTimeRangeDescription(slicedData) {
 }
 
 function renderChart() {
-    if (!currentKeyword || !chart) return;
+    console.log('renderChart called, currentKeyword:', currentKeyword, 'chart:', chart);
+    if (!currentKeyword || !chart) {
+        console.warn('renderChart early return - currentKeyword:', currentKeyword, 'chart:', chart);
+        return;
+    }
+    
+    // 检查数据是否存在
+    if (!extendedData[currentKeyword]) {
+        console.error('No extendedData for keyword:', currentKeyword);
+        return;
+    }
+    
+    const data = extendedData[currentKeyword].dailyData || extendedData[currentKeyword].data;
+    console.log('Data for', currentKeyword, ':', data ? data.length : 'undefined', 'points');
+    
+    if (!data || data.length === 0) {
+        console.error('No data available for keyword:', currentKeyword);
+        return;
+    }
     
     const keywordsToShow = comparingKeywords.length > 0 
         ? [currentKeyword, ...comparingKeywords.filter(k => k !== currentKeyword)]
