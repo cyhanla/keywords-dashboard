@@ -2577,7 +2577,7 @@ function getTimeRangeDescription(slicedData) {
 }
 
 function renderChart() {
-    if (!currentKeyword) return;
+    if (!currentKeyword || !chart) return;
     
     const keywordsToShow = comparingKeywords.length > 0 
         ? [currentKeyword, ...comparingKeywords.filter(k => k !== currentKeyword)]
