@@ -2082,36 +2082,58 @@ function renderRankings() {
 // ==================== 关键词列表渲染 ====================
 
 function renderKeywordList() {
+    console.log('renderKeywordList called');
+    console.log('extendedData count:', Object.keys(extendedData).length);
+    
     const container = document.getElementById('keywordList');
-    const sortBy = document.getElementById('sortBy').value;
-    const trendFilter = document.getElementById('trendFilter').value;
-    const seasonFilter = document.getElementById('seasonFilter').value;
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    console.log('keywordList container:', container);
+    
+    if (!container) {
+        console.error('keywordList container not found!');
+        return;
+    }
+    
+    const sortBy = document.getElementById('sortBy');
+    const trendFilter = document.getElementById('trendFilter');
+    const seasonFilter = document.getElementById('seasonFilter');
+    const searchInput = document.getElementById('searchInput');
+    
+    console.log('Filter elements:', { sortBy, trendFilter, seasonFilter, searchInput });
     
     let keywords = Object.keys(extendedData);
+    console.log('Total keywords before filter:', keywords.length);
+    
+    if (keywords.length === 0) {
+        console.warn('No keywords in extendedData!');
+        container.innerHTML = '<div class="p-4 text-center text-gray-400">暂无关键词数据</div>';
+        return;
+    }
     
     // 搜索过滤
+    const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
     if (searchTerm) {
         keywords = keywords.filter(k => k.toLowerCase().includes(searchTerm));
     }
     
     // 趋势过滤
-    if (trendFilter !== 'all') {
-        if (trendFilter === 'anomaly') {
+    const trendFilterValue = trendFilter ? trendFilter.value : 'all';
+    if (trendFilterValue !== 'all') {
+        if (trendFilterValue === 'anomaly') {
             keywords = keywords.filter(k => extendedData[k].isAnomaly);
         } else {
-            keywords = keywords.filter(k => extendedData[k].trendTag === trendFilter);
+            keywords = keywords.filter(k => extendedData[k].trendTag === trendFilterValue);
         }
     }
     
     // 季节过滤
-    if (seasonFilter !== 'all') {
+    const seasonFilterValue = seasonFilter ? seasonFilter.value : 'all';
+    if (seasonFilterValue !== 'all') {
         keywords = keywords.filter(k => {
             const season = extendedData[k].season;
-            if (seasonFilter === 'upcoming') {
+            if (seasonFilterValue === 'upcoming') {
                 return isUpcomingSeason(season);
             }
-            return season === seasonFilter || season === 'all';
+            return season === seasonFilterValue || season === 'all';
         });
     }
     
@@ -2129,10 +2151,11 @@ function renderKeywordList() {
     }
     
     // 排序
+    const sortByValue = sortBy ? sortBy.value : 'growth';
     keywords.sort((a, b) => {
         const da = extendedData[a];
         const db = extendedData[b];
-        switch(sortBy) {
+        switch(sortByValue) {
             case 'growth': return db.growth - da.growth;
             case 'acceleration': return db.acceleration - da.acceleration;
             case 'stability': return db.stability - da.stability;
@@ -2142,7 +2165,12 @@ function renderKeywordList() {
         }
     });
     
-    document.getElementById('filteredCount').textContent = `${keywords.length} 个关键词`;
+    console.log('Keywords after filter:', keywords.length);
+    
+    const filteredCount = document.getElementById('filteredCount');
+    if (filteredCount) {
+        filteredCount.textContent = `${keywords.length} 个关键词`;
+    }
     
     container.innerHTML = keywords.map(keyword => {
         const d = extendedData[keyword];
@@ -2183,8 +2211,13 @@ function renderKeywordList() {
         `;
     }).join('');
     
+    console.log('Setting container.innerHTML, length:', container.innerHTML.length);
+    
     // 添加点击事件
-    container.querySelectorAll('.kw-item').forEach(item => {
+    const items = container.querySelectorAll('.kw-item');
+    console.log('Number of kw-item elements:', items.length);
+    
+    items.forEach(item => {
         item.addEventListener('click', (e) => {
             if (e.target.type !== 'checkbox') {
                 const kw = item.dataset.keyword;
