@@ -288,13 +288,21 @@
                     <h2 class="font-bold text-gray-900">📅 季节性周期对比</h2>
                     <span class="text-xs text-gray-500">今年 vs 去年同期</span>
                 </div>
-                <div class="flex gap-2">
-                    <select id="seasonalCompareCategory" onchange="initSeasonalComparison()" class="px-3 py-1 border rounded-lg text-sm">
-                        <option value="">选择品类</option>
+                <div class="flex gap-2 items-center">
+                    <select id="seasonalCompareCategory" onchange="onSeasonalCategoryChange()" class="px-3 py-1 border rounded-lg text-sm">
+                        <option value="">全部品类</option>
                     </select>
-                    <select id="seasonalCompareKeyword" onchange="renderSeasonalComparison()" class="px-3 py-1 border rounded-lg text-sm">
-                        <option value="">选择关键词</option>
-                    </select>
+                    <div class="relative">
+                        <input type="text" id="seasonalCompareSearch" placeholder="输入关键词搜索..."
+                               class="px-3 py-1 pl-8 border rounded-lg text-sm w-48 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                               oninput="onSeasonalSearchInput(this.value)"
+                               onkeydown="onSeasonalSearchKeydown(event)">
+                        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+                        <div id="seasonalSearchDropdown" class="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto hidden z-50">
+                            <!-- 搜索结果 -->
+                        </div>
+                    </div>
+                    <span id="seasonalSelectedKeyword" class="text-sm text-gray-600 max-w-[150px] truncate"></span>
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -1036,6 +1044,14 @@ function init() {
     initSeasonalComparison();
     findKeywordCombinations();
     generateRecommendations();
+    
+    // 点击外部关闭季节性搜索下拉框
+    document.addEventListener('click', (e) => {
+        const searchContainer = document.getElementById('seasonalCompareSearch')?.parentElement;
+        if (searchContainer && !searchContainer.contains(e.target)) {
+            hideSeasonalDropdown();
+        }
+    });
 }
 
 // ==================== 智能预警系统 ====================
@@ -1202,37 +1218,146 @@ function dismissAllAlerts() {
 // ==================== 季节性周期对比 ====================
 
 let seasonalCompareChart = null;
+let currentSeasonalKeyword = '';
 
 function initSeasonalComparison() {
     const categorySelect = document.getElementById('seasonalCompareCategory');
-    const keywordSelect = document.getElementById('seasonalCompareKeyword');
     
     // 初始化品类下拉框
     if (categorySelect.options.length <= 1) {
         const categories = getAllCategories();
-        categorySelect.innerHTML = '<option value="">选择品类</option>' + 
+        categorySelect.innerHTML = '<option value="">全部品类</option>' + 
             categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
     }
     
-    const selectedCategory = categorySelect.value;
-    let keywords = Object.keys(extendedData).sort();
+    // 默认选择第一个季节性关键词
+    let keywords = Object.keys(extendedData).filter(kw => extendedData[kw].season !== 'all');
+    if (keywords.length > 0) {
+        selectSeasonalKeyword(keywords[0]);
+    }
+}
+
+function onSeasonalCategoryChange() {
+    const category = document.getElementById('seasonalCompareCategory').value;
+    let keywords = Object.keys(extendedData).filter(kw => extendedData[kw].season !== 'all');
     
-    // 如果选择了品类，只显示该品类下的关键词
-    if (selectedCategory) {
-        keywords = filterKeywordsByCategory(keywords, selectedCategory);
+    if (category) {
+        keywords = filterKeywordsByCategory(keywords, category);
     }
     
-    // 筛选有季节性模式的关键词
-    const seasonalKeywords = keywords.filter(kw => extendedData[kw].season !== 'all');
+    // 清空搜索框并显示提示
+    const searchInput = document.getElementById('seasonalCompareSearch');
+    searchInput.value = '';
+    searchInput.placeholder = category ? `搜索${category}...` : '输入关键词搜索...';
     
-    keywordSelect.innerHTML = '<option value="">选择关键词</option>' + 
-        seasonalKeywords.map(kw => `<option value="${kw}">${kw}</option>`).join('');
+    hideSeasonalDropdown();
     
-    // 默认选择第一个
-    if (seasonalKeywords.length > 0) {
-        keywordSelect.value = seasonalKeywords[0];
-        renderSeasonalComparison();
+    // 如果有匹配的关键词，默认选第一个
+    if (keywords.length > 0) {
+        selectSeasonalKeyword(keywords[0]);
     }
+}
+
+function onSeasonalSearchInput(value) {
+    if (!value.trim()) {
+        hideSeasonalDropdown();
+        return;
+    }
+    
+    const category = document.getElementById('seasonalCompareCategory').value;
+    let keywords = Object.keys(extendedData).filter(kw => extendedData[kw].season !== 'all');
+    
+    if (category) {
+        keywords = filterKeywordsByCategory(keywords, category);
+    }
+    
+    // 模糊搜索
+    const searchTerm = value.toLowerCase();
+    const matches = keywords.filter(kw => kw.toLowerCase().includes(searchTerm)).slice(0, 20);
+    
+    showSeasonalDropdown(matches);
+}
+
+function onSeasonalSearchKeydown(event) {
+    const dropdown = document.getElementById('seasonalSearchDropdown');
+    const items = dropdown.querySelectorAll('.seasonal-search-item');
+    let activeIndex = -1;
+    
+    items.forEach((item, idx) => {
+        if (item.classList.contains('bg-blue-50')) activeIndex = idx;
+    });
+    
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        activeIndex = Math.min(activeIndex + 1, items.length - 1);
+        highlightSeasonalItem(items, activeIndex);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        activeIndex = Math.max(activeIndex - 1, 0);
+        highlightSeasonalItem(items, activeIndex);
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (activeIndex >= 0 && items[activeIndex]) {
+            items[activeIndex].click();
+        } else if (items.length > 0) {
+            items[0].click();
+        }
+    } else if (event.key === 'Escape') {
+        hideSeasonalDropdown();
+    }
+}
+
+function highlightSeasonalItem(items, index) {
+    items.forEach((item, idx) => {
+        if (idx === index) {
+            item.classList.add('bg-blue-50');
+        } else {
+            item.classList.remove('bg-blue-50');
+        }
+    });
+}
+
+function showSeasonalDropdown(keywords) {
+    const dropdown = document.getElementById('seasonalSearchDropdown');
+    if (keywords.length === 0) {
+        dropdown.innerHTML = '<div class="px-3 py-2 text-gray-400 text-sm">无匹配结果</div>';
+    } else {
+        dropdown.innerHTML = keywords.map(kw => {
+            const d = extendedData[kw];
+            const seasonTag = getSeasonTag(d.season);
+            return `
+                <div class="seasonal-search-item px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm flex items-center justify-between"
+                     onclick="selectSeasonalKeyword('${kw}')">
+                    <span>${kw}</span>
+                    <span class="text-xs text-gray-400">${seasonTag}</span>
+                </div>
+            `;
+        }).join('');
+    }
+    dropdown.classList.remove('hidden');
+}
+
+function hideSeasonalDropdown() {
+    document.getElementById('seasonalSearchDropdown').classList.add('hidden');
+}
+
+function getSeasonTag(season) {
+    const tags = {
+        'spring': '🌸春季',
+        'summer': '☀️夏季',
+        'autumn': '🍂秋季',
+        'winter': '❄️冬季',
+        'explosive': '🔥爆发'
+    };
+    return tags[season] || season;
+}
+
+function selectSeasonalKeyword(keyword) {
+    currentSeasonalKeyword = keyword;
+    document.getElementById('seasonalCompareSearch').value = '';
+    document.getElementById('seasonalSelectedKeyword').textContent = keyword;
+    hideSeasonalDropdown();
+    renderSeasonalComparison();
 }
 
 function initSeasonalCompareChart() {
@@ -1261,8 +1386,8 @@ function initSeasonalCompareChart() {
 }
 
 function renderSeasonalComparison() {
-    const keyword = document.getElementById('seasonalCompareKeyword').value;
-    if (!keyword || !seasonalCompareChart) return;
+    const keyword = currentSeasonalKeyword;
+    if (!keyword || !extendedData[keyword] || !seasonalCompareChart) return;
     
     const d = extendedData[keyword];
     const dailyData = d.dailyData || d.data;
