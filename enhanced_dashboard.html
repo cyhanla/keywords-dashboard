@@ -211,7 +211,7 @@
                         <h2 class="font-semibold text-gray-900">📋 关键词列表</h2>
                         <span id="filteredCount" class="text-xs text-gray-500"></span>
                     </div>
-                    <div id="keywordList" class="max-h-[600px] overflow-y-auto">
+                    <div id="keywordListSidebar" class="max-h-[600px] overflow-y-auto">
                         <!-- Dynamic content -->
                     </div>
                 </div>
@@ -377,16 +377,6 @@
                     <div id="tagFilterList" class="flex flex-wrap gap-2">
                         <button onclick="filterByTag('all')" class="tag-filter px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700" data-tag="all">全部</button>
                         <!-- Dynamic tags -->
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <div class="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                        <h2 class="font-semibold text-gray-900">📋 关键词列表</h2>
-                        <span id="filteredCount" class="text-xs text-gray-500"></span>
-                    </div>
-                    <div id="keywordListDuplicate" class="max-h-[600px] overflow-y-auto">
-                        <!-- Dynamic content -->
                     </div>
                 </div>
             </div>
@@ -681,7 +671,7 @@ async function loadData() {
     } catch (error) {
         console.error('Error loading data:', error);
         // 如果加载失败，使用备用数据
-        document.getElementById('keywordList').innerHTML = 
+        document.getElementById('keywordListSidebar').innerHTML = 
             '<div class="p-4 text-center text-red-500">数据加载失败，请刷新页面重试</div>';
     }
 }
@@ -1811,7 +1801,7 @@ function filterByType(type) {
     
     // 渲染列表并滚动到顶部
     renderKeywordList();
-    document.getElementById('keywordList').scrollTop = 0;
+    document.getElementById('keywordListSidebar').scrollTop = 0;
 }
 
 // ==================== 标签管理 ====================
@@ -2085,7 +2075,7 @@ function renderKeywordList() {
     console.log('renderKeywordList called');
     console.log('extendedData count:', Object.keys(extendedData).length);
     
-    const container = document.getElementById('keywordList');
+    const container = document.getElementById('keywordListSidebar');
     console.log('keywordList container:', container);
     
     if (!container) {
