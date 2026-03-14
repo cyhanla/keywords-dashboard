@@ -647,8 +647,8 @@ let extendedData = {};
 
 async function loadData() {
     try {
-        // 尝试加载gzip压缩的数据
-        const response = await fetch('./all_keywords.json.gz');
+        // 尝试加载gzip压缩的数据（添加v=2缓存破坏）
+        const response = await fetch('./all_keywords.json.gz?v=2');
         if (!response.ok) {
             throw new Error('Failed to load data');
         }
