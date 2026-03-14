@@ -688,6 +688,7 @@ async function loadData() {
 
 // 处理原始数据，生成扩展数据和日级别插值
 function processData() {
+    console.log('processData called');
     extendedData = {};
     const seasonalPatterns = {
         // 春季品类（开学季）
@@ -805,18 +806,58 @@ function processData() {
             season: getSeasonFromKeyword(keyword)
         };
     });
+    console.log('processData completed, extendedData count:', Object.keys(extendedData).length);
 }
 
 // 生成日级别插值数据
 function generateDailyData(monthlyData) {
+    console.log('generateDailyData called, data points:', monthlyData ? monthlyData.length : 0);
+    if (!monthlyData || monthlyData.length === 0) {
+        console.error('generateDailyData: no data provided');
+        return [];
+    }
+    
+    // 检查数据字段
+    const firstPoint = monthlyData[0];
+    console.log('First data point:', firstPoint);
+    if (!firstPoint.date || typeof firstPoint.value === 'undefined') {
+        console.error('generateDailyData: invalid data format');
+        return [];
+    }
+    
     const dailyData = [];
     
     for (let i = 0; i < monthlyData.length - 1; i++) {
         const current = monthlyData[i];
         const next = monthlyData[i + 1];
+        
+        // 检查字段存在性
+        if (!current.date || !next.date) {
+            console.error('Missing date at index', i);
+            continue;
+        }
+        
         const currentDate = new Date(current.date);
         const nextDate = new Date(next.date);
+        
+        // 检查日期有效性
+        if (isNaN(currentDate.getTime()) || isNaN(nextDate.getTime())) {
+            console.error('Invalid date:', current.date, next.date);
+            continue;
+        }
+        
         const daysDiff = Math.round((nextDate - currentDate) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff <= 0 || daysDiff > 365) {
+            // 如果日期差不合理，跳过插值，直接添加当前点
+            dailyData.push({
+                date: current.date,
+                value: current.value,
+                conversion: current.conversion,
+                click_rate: current.click_rate
+            });
+            continue;
+        }
         
         for (let day = 0; day < daysDiff; day++) {
             const ratio = day / daysDiff;
@@ -847,6 +888,7 @@ function generateDailyData(monthlyData) {
         });
     }
     
+    console.log('generateDailyData completed, generated', dailyData.length, 'daily points');
     return dailyData;
 }
 
@@ -2165,13 +2207,17 @@ function isUpcomingSeason(season) {
 // ==================== 选择和对比 ====================
 
 function selectKeyword(keyword) {
+    console.log('selectKeyword called:', keyword);
     currentKeyword = keyword;
     if (!compareMode) {
         comparingKeywords = [];
     }
     renderKeywordList();
+    console.log('About to call renderChart...');
     renderChart();
+    console.log('About to call renderDetails...');
     renderDetails();
+    console.log('selectKeyword completed');
 }
 
 function toggleCompareMode() {
@@ -2462,7 +2508,17 @@ function renderCompetitionMatrix() {
 // ==================== 图表渲染 ====================
 
 function initChart() {
-    const ctx = document.getElementById('trendChart').getContext('2d');
+    console.log('initChart called');
+    const canvas = document.getElementById('trendChart');
+    console.log('trendChart canvas:', canvas);
+    if (!canvas) {
+        console.error('trendChart canvas not found!');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    console.log('canvas context:', ctx);
+    
     chart = new Chart(ctx, {
         type: 'line',
         data: { labels: [], datasets: [] },
@@ -2578,8 +2634,14 @@ function getTimeRangeDescription(slicedData) {
 
 function renderChart() {
     console.log('renderChart called, currentKeyword:', currentKeyword, 'chart:', chart);
-    if (!currentKeyword || !chart) {
-        console.warn('renderChart early return - currentKeyword:', currentKeyword, 'chart:', chart);
+    
+    if (!currentKeyword) {
+        console.warn('renderChart: no currentKeyword');
+        return;
+    }
+    
+    if (!chart) {
+        console.error('renderChart: chart is null!');
         return;
     }
     
@@ -2589,7 +2651,10 @@ function renderChart() {
         return;
     }
     
-    const data = extendedData[currentKeyword].dailyData || extendedData[currentKeyword].data;
+    const keywordData = extendedData[currentKeyword];
+    console.log('keywordData:', keywordData);
+    
+    const data = keywordData.dailyData || keywordData.data;
     console.log('Data for', currentKeyword, ':', data ? data.length : 'undefined', 'points');
     
     if (!data || data.length === 0) {
